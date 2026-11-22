@@ -38,7 +38,7 @@ section.page{display:none} section.page.on{display:block}
 .card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
 .row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
 .row + .row{margin-top:8px}
-.grow{flex:1;min-width:0}
+.grow{flex:1}
 select{max-width:100%;text-overflow:ellipsis}
 button,select,input,textarea{font-family:inherit;font-size:15px}
 button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer}
@@ -155,7 +155,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
   <div class="card">
     <div class="row" style="justify-content:space-between">
       <div class="title-line" id="selInfo">控え（タップで空いている駒に入る）</div>
-      <button class="sm" id="unassignBtn" hidden>この駒から外す</button>
+      <div class="row" style="margin:0;gap:6px"><button class="sm" id="unassignBtn" hidden>この駒から外す</button><button class="sm" id="squadBtn" hidden></button></div>
     </div>
     <div class="bench" id="bench"></div>
   </div>
@@ -328,7 +328,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <dialog id="dlgSquad">
   <h3>この試合のベンチ入り</h3>
-  <p class="muted" style="margin-top:0">来た選手にチェック。先発と、交代で出入りした選手は外せません。候補はメンバー画面で「登録」している選手です。</p>
+  <p class="muted" style="margin-top:0">来た選手にチェック。先発の選手を外すと、先発の駒から外れます（空いた駒になります）。交代で出入りした選手は外せません。候補はメンバー画面で「登録」している選手です。</p>
   <div class="row" style="margin-bottom:6px"><button class="sm" id="sqAll">全員</button><button class="sm" id="sqNone">先発だけ</button><span class="muted" id="sqCount"></span></div>
   <div id="sqList" style="max-height:48vh;overflow-y:auto"></div>
   <div class="btns"><button id="sqCancel">キャンセル</button><button class="pri" id="sqOk">保存</button></div>
@@ -404,7 +404,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <script>
 'use strict';
-const APP_VERSION='0.9.0';
+const APP_VERSION='0.9.1';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -557,7 +557,7 @@ function drawBall(g,root=svg){
   const verts=(c,rr,rot)=>Array.from({length:5},(_,k)=>{const t=rot+k*2*Math.PI/5;return [c[0]+rr*Math.sin(t),c[1]-rr*Math.cos(t)]});
   const pts=v=>v.map(p=>p.map(n=>n.toFixed(3)).join(',')).join(' ');
   const SEAM={stroke:'#222','stroke-width':.11,'stroke-linecap':'round'};
-  const a=r*.33, D=r*1.12, bR=r*.40, step=2*Math.PI/5; // 外の五角形は縁で半分ほど見える位置に置く
+  const a=r*.42, D=r*1.12, bR=r*.40, step=2*Math.PI/5; // 外の五角形は縁で半分ほど見える位置に置く
   el('polygon',{points:pts(verts([0,0],a,0)),fill:'#222'},inner);
   const outer=[];
   for(let k=0;k<5;k++){
@@ -741,13 +741,12 @@ function renderBoard(){
         const fe=viewEvent();
         const optTxt=e=>`${e.min==null?'':e.min+"' "}${e.type==='form'?'フォーメーション変更'+(e.text?'（'+esc(e.text)+'）':''):esc(plLabel(e.out))+' → '+esc(plLabel(e.in))} の後`;
         li.innerHTML=`試合 <b>${esc(src.date)} vs ${esc(src.opponent||'—')}</b>${src.competition?` <span class="tagm">${esc(src.competition)}</span>`:''} を編集中`
-          +`<div class="row" style="margin-top:6px"><button class="sm" id="liEvents">経過${evSummary(src)?'（'+evSummary(src)+'）':''}</button><button class="sm" id="liSquad">ベンチ入り ${matchSquad(src).size}人</button><button class="sm" id="liForm">🔀 フォーメーション変更</button></div>`
+          +`<div class="row" style="margin-top:6px"><button class="sm" id="liEvents">経過${evSummary(src)?'（'+evSummary(src)+'）':''}</button><button class="sm" id="liForm">🔀 フォーメーション変更</button></div>`
           +(subs.length?`<div class="row" style="margin-top:6px"><span>並び</span><select id="viewAtSel" class="grow"><option value="">先発</option>${
             subs.map(e=>`<option value="${e.id}"${e.id===S.viewAt?' selected':''}>${optTxt(e)}</option>`).join('')}</select></div>`
             +(fe&&fe.type==='form'?`<div class="muted" style="margin-top:4px">${fe.min==null?'':fe.min+'分の'}フォーメーション変更を編集中。駒をドラッグで動かすと、この時点からの並びが変わります（上のひな形でも並べ直せます）。選手の入れ替えは交代で記録します。</div>`
               :S.viewAt?`<div class="muted" style="margin-top:4px">交代後の並び（表示のみ）。先発の位置や選手を直すときは「先発」に戻してください。</div>`:''):'');
         document.getElementById('liEvents').onclick=()=>openEventsDlg(src);
-        document.getElementById('liSquad').onclick=()=>openSquadDlg(src);
         document.getElementById('liForm').onclick=()=>openEventsDlg(src,'form');
         const vs=document.getElementById('viewAtSel');if(vs)vs.onchange=()=>{S.viewAt=vs.value||null;S.selected=null;renderBoard()};
       }
@@ -927,6 +926,7 @@ function renderBench(){
   const b=S.board, used=new Set(effectiveIds().filter(Boolean));
   const vm=viewMatch();
   const bench=(vm?squadPlayers(vm):activePlayers()).filter(p=>!used.has(p.id));
+  const sqb=document.getElementById('squadBtn');sqb.hidden=!vm;if(vm)sqb.textContent=`👥 ベンチ入り ${matchSquad(vm).size}人`;
   const sel=S.selected, info=document.getElementById('selInfo'), un=document.getElementById('unassignBtn');
   const box=document.getElementById('bench');
   if(S.selOpp!=null && b.opp[S.selOpp]){ // 相手の駒を選んでいるときは、相手の控えの背番号を出す
@@ -1285,33 +1285,42 @@ document.getElementById('evList').onclick=async ev=>{
 // ---------- 試合のベンチ入り ----------
 // match.squad = [playerId]（後方互換の追加項目。無い試合は登録メンバー全員がベンチ入り）
 const dlgSquad=document.getElementById('dlgSquad');let sqMatch=null;
+function squadStarters(m){const b=(S.board.src&&S.board.src.type==='match'&&S.board.src.id===m.id)?S.board:m.board;return new Set(b.pieces.map(p=>p.playerId).filter(Boolean))}
+// 交代で出入りした選手は外せない（経過の記録が選手を指しているため）。先発は外せる（外すと先発の駒から外れる）
 function squadLocked(m){
-  const b=(S.board.src&&S.board.src.type==='match'&&S.board.src.id===m.id)?S.board:m.board, set=new Set();
-  b.pieces.forEach(p=>p.playerId&&set.add(p.playerId));
+  const set=new Set();
   (m.events||[]).forEach(e=>{if(e.type==='sub'){if(e.in)set.add(e.in);if(e.out)set.add(e.out)}});
   return set;
 }
 function openSquadDlg(m){
-  sqMatch=m;const cur=matchSquad(m), lock=squadLocked(m);
+  sqMatch=m;const cur=matchSquad(m), lock=squadLocked(m), st=squadStarters(m);
   const cands=S.players.filter(p=>!p.deletedAt&&(p.active!==false||cur.has(p.id))).sort((a,b)=>(a.number??999)-(b.number??999));
   document.getElementById('sqList').innerHTML=cands.length?cands.map(p=>`<label class="chk" style="display:flex;padding:6px 2px;border-bottom:1px solid var(--line)">
     <input type="checkbox" data-id="${p.id}" ${cur.has(p.id)?'checked':''} ${lock.has(p.id)?'disabled':''}>
-    <b style="min-width:2em;text-align:right">${esc(p.number??'')}</b> ${esc(p.name||'')} <span class="muted">${esc(p.pos||'')}${lock.has(p.id)?'・先発/交代':''}${p.active===false?'・登録外':''}</span></label>`).join('')
+    <b style="min-width:2em;text-align:right">${esc(p.number??'')}</b> ${esc(p.name||'')} <span class="muted">${esc(p.pos||'')}${lock.has(p.id)?'・交代で出入り':st.has(p.id)?'・先発':''}${p.active===false?'・登録外':''}</span></label>`).join('')
     :'<div class="empty">メンバー画面で選手を登録してください</div>';
   sqCount();dlgSquad.showModal();
 }
 function sqCount(){const n=document.querySelectorAll('#sqList input:checked').length;document.getElementById('sqCount').textContent=`${n}人`}
 document.getElementById('sqList').addEventListener('change',sqCount);
 document.getElementById('sqAll').onclick=()=>{document.querySelectorAll('#sqList input').forEach(c=>c.checked=true);sqCount()};
-document.getElementById('sqNone').onclick=()=>{document.querySelectorAll('#sqList input:not(:disabled)').forEach(c=>c.checked=false);sqCount()};
+document.getElementById('sqNone').onclick=()=>{const st=squadStarters(sqMatch);document.querySelectorAll('#sqList input:not(:disabled)').forEach(c=>c.checked=st.has(c.dataset.id));sqCount()};
 document.getElementById('sqCancel').onclick=()=>dlgSquad.close();
+document.getElementById('squadBtn').onclick=()=>{const m=viewMatch();if(m)openSquadDlg(m)};
 document.getElementById('sqOk').onclick=async()=>{
   const m=sqMatch;if(!m)return;
   // 候補に出していない選手（登録外・削除済み）で、もともとベンチ入りしていた人は残す
   const shown=new Set([...document.querySelectorAll('#sqList input')].map(c=>c.dataset.id));
   const keep=(Array.isArray(m.squad)?m.squad:[]).filter(id=>!shown.has(id));
-  m.squad=[...keep,...[...document.querySelectorAll('#sqList input:checked')].map(c=>c.dataset.id)];
-  m.updatedAt=now();await put('matches',m);dlgSquad.close();toast('ベンチ入りを保存しました');renderBoard();
+  const on=[...document.querySelectorAll('#sqList input:checked')].map(c=>c.dataset.id);
+  // 外した先発の選手は、先発の駒から外す（ボードと試合の記録の両方）
+  const offStarters=[...squadStarters(m)].filter(id=>shown.has(id)&&!on.includes(id));
+  if(offStarters.length&&!confirm(`先発の ${offStarters.map(plLabel).join('、')} をベンチ入りから外します。先発の駒からも外れ、空いた駒になります。よろしいですか？`))return;
+  m.squad=[...keep,...on];
+  const off=new Set(offStarters);
+  for(const b of [m.board,(S.board.src&&S.board.src.type==='match'&&S.board.src.id===m.id)?S.board:null]) if(b) b.pieces.forEach(p=>{if(off.has(p.playerId))p.playerId=null});
+  if(off.size)persistBoard();
+  m.updatedAt=now();await put('matches',m);dlgSquad.close();toast('ベンチ入りを保存しました');renderAllLists();renderBoard();
 };
 
 // ---------- メンバー ----------
@@ -1671,6 +1680,11 @@ function drawTac(){
   const sc=T.scene, fr=curFrame(), [x0,y0,x1,y1]=zoomBox(fr,sc.dir);
   drawFieldOn(tsvg,'tah');
   tsvg.setAttribute('viewBox',`${x0} ${y0} ${x1-x0} ${y1-y0}`);
+  // 駒・ボールは拡大しない（全体表示のときと同じ見た目の大きさ）。倍率 = 全体表示の1mあたりの画素 ÷ いまの1mあたりの画素
+  let k=(x1-x0)/74;
+  try{const w=tsvg.getBoundingClientRect().width, ctm=tsvg.getScreenCTM();if(w>0&&ctm&&ctm.a>0)k=(w/74)/ctm.a}catch(e){}
+  T.k=Math.min(1,k);
+  const tr=(x,y)=>`translate(${x},${y}) scale(${T.k})`;
   // 攻撃方向（左端に大きな矢印）
   const L=Math.min(28,(y1-y0)*.42), cx=x0+2.6, cy=(y0+y1)/2, up=sc.dir!=='down';
   const dg=el('g',{opacity:.55,'pointer-events':'none'},tsvg);
@@ -1683,7 +1697,7 @@ function drawTac(){
   fr.marks.forEach(m=>drawMark(m,mg));
   // 相手
   if(fr.showOpp) fr.opp.forEach((o,i)=>{
-    const g=el('g',{class:'piece','data-kind':'opp','data-i':i,transform:`translate(${o.x},${o.y})`},tsvg);
+    const g=el('g',{class:'piece','data-kind':'opp','data-i':i,transform:tr(o.x,o.y)},tsvg);
     el('circle',{r:R*.92,fill:fr.oppColor,stroke:'#fff','stroke-width':.35},g);
     const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.6,fill:contrast(fr.oppColor)},g);t.textContent=o.n;
   });
@@ -1691,7 +1705,7 @@ function drawTac(){
   fr.pieces.forEach((p,i)=>{
     const k=p.role==='GK'?S.settings.kits.gk:S.settings.kits[sc.kit||'home'];
     const pl=sc.label==='name'&&sc.ids[i]?playerById(sc.ids[i]):null;
-    const g=el('g',{class:'piece','data-kind':'own','data-i':i,transform:`translate(${p.x},${p.y})`},tsvg);
+    const g=el('g',{class:'piece','data-kind':'own','data-i':i,transform:tr(p.x,p.y)},tsvg);
     if(T.sel===i) el('circle',{r:R+1.1,fill:'none',stroke:'#fde047','stroke-width':.7},g);
     el('circle',{r:R,fill:k.shirt,stroke:'rgba(0,0,0,.45)','stroke-width':.3},g);
     const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:(p.role.length>2?1.9:2.4),'font-weight':'bold',fill:k.text},g);
@@ -1703,7 +1717,7 @@ function drawTac(){
       g.insertBefore(el('rect',{x:-tw/2,y:R+.35,width:tw,height:bh,rx:.7,fill:'rgba(0,0,0,.6)'}),n);
     }
   });
-  if(fr.showBall){const g=el('g',{class:'piece','data-kind':'ball',transform:`translate(${fr.ball.x},${fr.ball.y})`},tsvg);drawBall(g,tsvg)}
+  if(fr.showBall){const g=el('g',{class:'piece','data-kind':'ball',transform:tr(fr.ball.x,fr.ball.y)},tsvg);drawBall(g,tsvg)}
 }
 function drawMark(m,parent,temp){
   if(m.kind==='h'||m.kind==='v'){
@@ -1793,7 +1807,7 @@ tsvg.addEventListener('pointermove',ev=>{
   if(!tdrag.moved&&Math.hypot(ev.clientX-tdrag.sx,ev.clientY-tdrag.sy)<5)return;
   tdrag.moved=true;const p=svgPt(ev,tsvg);
   tdrag.obj.x=r1(Math.min(W+1.5,Math.max(-1.5,p.x+tdrag.dx)));tdrag.obj.y=r1(Math.min(H+1.5,Math.max(-1.5,p.y+tdrag.dy)));
-  tdrag.g.setAttribute('transform',`translate(${tdrag.obj.x},${tdrag.obj.y})`);
+  tdrag.g.setAttribute('transform',`translate(${tdrag.obj.x},${tdrag.obj.y}) scale(${T.k||1})`);
 });
 function tEnd(){
   if(tpen){
