@@ -188,11 +188,11 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
       <button class="sm pri" id="bulkApply">一括で変更</button>
       <button class="sm" id="bulkClear">選択を解除</button>
     </div>
-    <table><thead><tr><th style="width:1.8em"><input type="checkbox" id="selAll" title="すべて選択"></th><th style="width:3.2em">背番号</th><th>名前</th><th style="width:3.6em">学年</th><th style="width:2.6em">位置</th><th style="width:2.6em">在籍</th><th style="width:3.2em"></th></tr></thead>
+    <table><thead><tr><th style="width:1.8em"><input type="checkbox" id="selAll" title="すべて選択"></th><th style="width:3.2em">背番号</th><th>名前</th><th style="width:3.6em">学年</th><th style="width:2.6em">位置</th><th style="width:2.6em;line-height:1.15">ベンチ<br>入り</th><th style="width:3.2em"></th></tr></thead>
     <tbody id="playerRows"></tbody></table>
     <div id="playerEmpty" class="empty" hidden>まだメンバーがいません。「＋ 追加」から登録してください。</div>
   </div>
-  <p class="muted">在籍を外した選手は控えに出なくなります（保存済みのボードには残ります）。左のチェックで選ぶと、学年を一括で変更できます。</p>
+  <p class="muted">ベンチ入りを外した選手は控えに出なくなります（保存済みのボードには残ります）。左のチェックで選ぶと、学年を一括で変更できます。</p>
   <div class="card">
     <div class="title-line">学年</div>
     <div id="gradeList"></div>
@@ -334,7 +334,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <script>
 'use strict';
-const APP_VERSION='0.7.1';
+const APP_VERSION='0.7.2';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
