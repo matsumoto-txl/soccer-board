@@ -21,6 +21,7 @@
     --accent:#22a356; --pitch:#24703a; --pitch2:#206434; }
 }
 *{box-sizing:border-box}
+[hidden]{display:none!important} /* .row などの display 指定より hidden を優先する */
 html,body{margin:0;background:var(--bg);color:var(--ink);
   font-family:"游ゴシック","Yu Gothic",YuGothic,"Hiragino Sans",system-ui,sans-serif;font-size:15px;-webkit-text-size-adjust:100%}
 header{position:sticky;top:0;z-index:20;background:var(--accent);color:var(--accent-ink);
@@ -53,8 +54,10 @@ label.chk{display:inline-flex;align-items:center;gap:4px}
 .seg button.on{background:var(--accent);color:var(--accent-ink)}
 .muted{color:var(--sub);font-size:13px}
 .title-line{font-weight:bold;font-size:14px;margin-bottom:6px}
-#pitchWrap{position:relative;max-width:520px;margin:0 auto;touch-action:none}
-#pitch{width:100%;display:block;border-radius:8px;user-select:none;-webkit-user-select:none}
+#pitchWrap{position:relative;max-width:520px;margin:0 auto}
+/* ピッチの上は指で駒を動かすのでスクロールしない。スマホでは右に余白を空け、そこを指でなぞってスクロールする */
+@media (max-width:600px){#pitchWrap{margin:0 48px 0 0}}
+#pitch{width:100%;display:block;border-radius:8px;user-select:none;-webkit-user-select:none;touch-action:none}
 .piece{cursor:grab}
 .piece text{pointer-events:none;font-weight:bold}
 .bench{display:flex;flex-wrap:wrap;gap:6px}
@@ -69,7 +72,8 @@ label.chk{display:inline-flex;align-items:center;gap:4px}
 .res-w{color:var(--accent)} .res-l{color:var(--danger)} .res-d{color:var(--sub)}
 table{width:100%;border-collapse:collapse}
 th,td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
-th{color:var(--sub);font-weight:normal;font-size:12px}
+th{color:var(--sub);font-weight:normal;font-size:12px;white-space:nowrap}
+td button{white-space:nowrap}
 .kitrow{display:grid;grid-template-columns:5.5em 1fr 1fr 44px;gap:8px;align-items:center;margin-bottom:8px}
 .kitrow input[type=color]{width:100%;height:34px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px}
 .banner{position:sticky;top:0;z-index:30;background:#fef3c7;color:#713f12;border-bottom:1px solid #f59e0b;padding:10px 12px;font-size:14px}
@@ -176,7 +180,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
       <div class="title-line">チームメンバー</div>
       <button class="pri sm" id="addPlayerBtn">＋ 追加</button>
     </div>
-    <table><thead><tr><th style="width:3.5em">背番号</th><th>名前</th><th style="width:3.5em">位置</th><th style="width:3.5em">在籍</th><th style="width:3.5em"></th></tr></thead>
+    <table><thead><tr><th style="width:3.5em">背番号</th><th>名前</th><th style="width:3.2em">学年</th><th style="width:3.2em">位置</th><th style="width:3.5em">在籍</th><th style="width:3.5em"></th></tr></thead>
     <tbody id="playerRows"></tbody></table>
     <div id="playerEmpty" class="empty" hidden>まだメンバーがいません。「＋ 追加」から登録してください。</div>
   </div>
@@ -286,6 +290,12 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
   <h3 id="plTitle">メンバー</h3>
   <label class="f"><span>背番号</span><input type="number" id="plNum" min="0" max="99" inputmode="numeric"></label>
   <label class="f"><span>名前（ボードに出す名前）</span><input type="text" id="plName" placeholder="例: 山田"></label>
+  <label class="f"><span>学年</span><select id="plGrade"><option value="">—</option>
+    <optgroup label="幼児"><option>年少</option><option>年中</option><option>年長</option></optgroup>
+    <optgroup label="小学生"><option>小1</option><option>小2</option><option>小3</option><option>小4</option><option>小5</option><option>小6</option></optgroup>
+    <optgroup label="中学生"><option>中1</option><option>中2</option><option>中3</option></optgroup>
+    <optgroup label="高校生"><option>高1</option><option>高2</option><option>高3</option></optgroup>
+    <optgroup label="その他"><option>大学</option><option>社会人</option></optgroup></select></label>
   <label class="f"><span>位置</span><select id="plPos"><option value="">—</option><option>GK</option><option>DF</option><option>MF</option><option>FW</option></select></label>
   <div class="btns"><button id="plCancel">キャンセル</button><button class="pri" id="plOk">保存</button></div>
 </dialog>
@@ -305,7 +315,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <script>
 'use strict';
-const APP_VERSION='0.4.0';
+const APP_VERSION='0.5.0';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -430,15 +440,29 @@ function drawBall(g){
   if(!svg.querySelector('#'+cid)){const cp=el('clipPath',{id:cid},svg.querySelector('defs'));el('circle',{r},cp)}
   el('circle',{r,fill:'#fff'},g);
   const inner=el('g',{'clip-path':`url(#${cid})`},g);
-  const pent=(cx,cy,rr,rot)=>Array.from({length:5},(_,k)=>{const t=rot+k*2*Math.PI/5;return `${(cx+rr*Math.sin(t)).toFixed(2)},${(cy-rr*Math.cos(t)).toFixed(2)}`}).join(' ');
-  el('polygon',{points:pent(0,0,r*.36,0),fill:'#111'},inner);
+  // 真ん中に五角形、各頂点から縫い目が外へ伸び、その先（縁）に五角形が5つ。五角形の間は六角形になる
+  const P=(d,a)=>[d*Math.sin(a),-d*Math.cos(a)];
+  const verts=(c,rr,rot)=>Array.from({length:5},(_,k)=>{const t=rot+k*2*Math.PI/5;return [c[0]+rr*Math.sin(t),c[1]-rr*Math.cos(t)]});
+  const pts=v=>v.map(p=>p.map(n=>n.toFixed(3)).join(',')).join(' ');
+  const SEAM={stroke:'#222','stroke-width':.11,'stroke-linecap':'round'};
+  const a=r*.33, D=r*1.12, bR=r*.40, step=2*Math.PI/5; // 外の五角形は縁で半分ほど見える位置に置く
+  el('polygon',{points:pts(verts([0,0],a,0)),fill:'#222'},inner);
+  const outer=[];
   for(let k=0;k<5;k++){
-    const t=Math.PI/5+k*2*Math.PI/5;
-    const vx=r*.36*Math.sin(t-Math.PI/5), vy=-r*.36*Math.cos(t-Math.PI/5);
-    el('line',{x1:vx.toFixed(2),y1:vy.toFixed(2),x2:(r*.78*Math.sin(t-Math.PI/5)).toFixed(2),y2:(-r*.78*Math.cos(t-Math.PI/5)).toFixed(2),stroke:'#111','stroke-width':.14},inner);
-    el('polygon',{points:pent(r*1.02*Math.sin(t),-r*1.02*Math.cos(t),r*.36,t+Math.PI),fill:'#111'},inner);
+    const th=k*step, c=P(D,th);
+    const v=verts(c,bR,th+Math.PI);   // v[0] が中心を向く頂点
+    outer.push(v);
+    el('polygon',{points:pts(v),fill:'#222'},inner);
+    const p0=P(a,th);
+    el('line',{x1:p0[0].toFixed(3),y1:p0[1].toFixed(3),x2:v[0][0].toFixed(3),y2:v[0][1].toFixed(3),...SEAM},inner);
   }
-  el('circle',{r,fill:'none',stroke:'#111','stroke-width':.18},g);
+  // となりの五角形どうしの近い頂点を結ぶ（六角形の外側の辺）
+  for(let k=0;k<5;k++){
+    const A=outer[k], B=outer[(k+1)%5];let best=null,bd=1e9;
+    for(const p of [A[1],A[4]])for(const q of [B[1],B[4]]){const d=Math.hypot(p[0]-q[0],p[1]-q[1]);if(d<bd){bd=d;best=[p,q]}}
+    el('line',{x1:best[0][0].toFixed(3),y1:best[0][1].toFixed(3),x2:best[1][0].toFixed(3),y2:best[1][1].toFixed(3),...SEAM},inner);
+  }
+  el('circle',{r,fill:'none',stroke:'#222','stroke-width':.16},g);
 }
 function drawPieces(){
   svg.querySelectorAll('.piece,.arrows').forEach(n=>n.remove());
@@ -935,7 +959,7 @@ function renderPlayers(){
   const list=S.players.filter(p=>!p.deletedAt).sort((a,b)=>(a.number??999)-(b.number??999));
   document.getElementById('playerEmpty').hidden=!!list.length;
   document.getElementById('playerRows').innerHTML=list.map(p=>`<tr>
-    <td><b>${esc(p.number??'')}</b></td><td>${esc(p.name||'')}</td><td>${esc(p.pos||'')}</td>
+    <td><b>${esc(p.number??'')}</b></td><td>${esc(p.name||'')}</td><td>${esc(p.grade||'')}</td><td>${esc(p.pos||'')}</td>
     <td><input type="checkbox" data-act="active" data-id="${p.id}" ${p.active!==false?'checked':''}></td>
     <td><button class="sm" data-act="edit" data-id="${p.id}">編集</button></td></tr>`).join('');
 }
@@ -946,6 +970,7 @@ function openPlayerDlg(p){
   document.getElementById('plNum').value=p&&p.number!=null?p.number:'';
   document.getElementById('plName').value=p?(p.name||''):'';
   document.getElementById('plPos').value=p?(p.pos||''):'';
+  document.getElementById('plGrade').value=p?(p.grade||''):'';
   let delBtn=document.getElementById('plDel');
   if(!delBtn){delBtn=document.createElement('button');delBtn.id='plDel';delBtn.className='danger';delBtn.textContent='削除';delBtn.style.marginRight='auto';
     dlgPlayer.querySelector('.btns').prepend(delBtn);
@@ -962,7 +987,7 @@ document.getElementById('plOk').onclick=async()=>{
   const number=nv===''?null:parseInt(nv,10);
   const dup=S.players.find(p=>!p.deletedAt&&p.active!==false&&number!=null&&p.number===number&&p!==editingPlayer);
   if(dup&&!confirm(`背番号 ${number} は ${dup.name} と重なっています。このまま保存しますか？`))return;
-  const data={number,name,pos:document.getElementById('plPos').value,updatedAt:now()};
+  const data={number,name,grade:document.getElementById('plGrade').value,pos:document.getElementById('plPos').value,updatedAt:now()};
   if(editingPlayer){Object.assign(editingPlayer,data);await put('players',editingPlayer)}
   else{const p=Object.assign({id:uid('p'),schema:SCHEMA,active:true,createdAt:now()},data);S.players.push(p);await put('players',p)}
   dlgPlayer.close();renderAll();
