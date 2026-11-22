@@ -121,13 +121,23 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
       <div class="seg" id="kitSeg"><button data-kit="home">ホーム</button><button data-kit="away">アウェイ</button></div>
     </div>
     <div class="row">
-      <label class="chk"><input type="checkbox" id="oppChk"> 相手を表示</label>
-      <label class="chk">相手の色 <input type="color" id="oppColor" value="#1d4ed8"></label>
+      <label class="chk"><input type="checkbox" id="oppChk"> 相手</label>
+      <select id="oppTeamSel" class="grow"></select>
+      <input type="color" id="oppColor" value="#1d4ed8" title="相手の色">
+    </div>
+    <div class="row">
       <label class="chk"><input type="checkbox" id="ballChk"> ボール</label>
+      <button class="sm" id="drawBtn">✏️ 矢印を描く</button>
+    </div>
+    <div class="row" id="drawRow" hidden>
+      <div class="seg" id="dashSeg"><button data-dash="0">実線</button><button data-dash="1">点線</button></div>
+      <div class="seg" id="curveSeg"><button data-curve="0">直線</button><button data-curve="1">曲線</button></div>
+      <button class="sm" id="undoArrowBtn">1本戻す</button>
+      <button class="sm danger" id="clearArrowBtn">全部消す</button>
     </div>
   </div>
   <div id="pitchWrap"><svg id="pitch" viewBox="-3 -3 74 111" xmlns="http://www.w3.org/2000/svg"></svg></div>
-  <p class="muted" style="text-align:center;margin:6px 0 10px">駒はドラッグで移動。駒をタップで選び、控えの選手かほかの駒をタップで入れ替え。</p>
+  <p class="muted" style="text-align:center;margin:6px 0 10px" id="pitchHint">駒はドラッグで移動。駒をタップで選び、控えの選手かほかの駒をタップで入れ替え。</p>
   <div class="card">
     <div class="row" style="justify-content:space-between">
       <div class="title-line" id="selInfo">控え（タップで空いている駒に入る）</div>
@@ -171,6 +181,14 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
     <div id="playerEmpty" class="empty" hidden>まだメンバーがいません。「＋ 追加」から登録してください。</div>
   </div>
   <p class="muted">在籍を外した選手は控えに出なくなります（保存済みのボードには残ります）。</p>
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="title-line">相手チーム</div>
+      <button class="pri sm" id="addOppBtn">＋ 追加</button>
+    </div>
+    <div id="oppList"></div>
+  </div>
+  <p class="muted">相手チームの背番号を登録しておくと、ボードで相手チームを選んだときに相手の駒にその番号が入ります。</p>
 </section>
 
 <!-- 設定 -->
@@ -236,6 +254,16 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
   <div class="btns"><button id="mtCancel">キャンセル</button><button class="pri" id="mtOk">保存</button></div>
 </dialog>
 
+<dialog id="dlgOpp">
+  <h3 id="opTitle">相手チーム</h3>
+  <label class="f"><span>チーム名</span><input type="text" id="opName" placeholder="例: 青葉FC"></label>
+  <label class="f"><span>ユニフォームの色</span><input type="color" id="opColor" value="#1d4ed8"></label>
+  <label class="f"><span>背番号（スペースかカンマで区切る。先頭から順にピッチに入ります）</span>
+    <textarea id="opNums" rows="3" inputmode="numeric" placeholder="例: 1 2 3 4 5 6 7 8 9 10 11 12 14"></textarea></label>
+  <div class="muted" id="opPreview"></div>
+  <div class="btns"><button id="opCancel">キャンセル</button><button class="pri" id="opOk">保存</button></div>
+</dialog>
+
 <dialog id="dlgEvents">
   <h3 id="evTitle">試合経過</h3>
   <div id="evList" style="max-height:38vh;overflow-y:auto;margin-bottom:10px"></div>
@@ -277,7 +305,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <script>
 'use strict';
-const APP_VERSION='0.3.0';
+const APP_VERSION='0.4.0';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -306,13 +334,15 @@ const KIT_LABEL={home:'ホーム',away:'アウェイ',gk:'GK'};
 let db;
 function openDB(){
   return new Promise((res,rej)=>{
-    const rq=indexedDB.open('soccer-board',1);
+    // version 2（v0.4.0）: 相手チームの store を追加するだけ。既存の store・データには触れない
+    const rq=indexedDB.open('soccer-board',2);
     rq.onupgradeneeded=()=>{
       const d=rq.result;
-      for(const s of ['players','formations','matches']) if(!d.objectStoreNames.contains(s)) d.createObjectStore(s,{keyPath:'id'});
+      for(const s of ['players','formations','matches','opponents']) if(!d.objectStoreNames.contains(s)) d.createObjectStore(s,{keyPath:'id'});
       if(!d.objectStoreNames.contains('meta')) d.createObjectStore('meta',{keyPath:'k'});
     };
-    rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
+    rq.onblocked=()=>alert('戦術ボードがほかのタブでも開いています。ほかのタブを閉じてから、この画面を開き直してください（データは消えていません）。');
+    rq.onsuccess=()=>{const d=rq.result;d.onversionchange=()=>d.close();res(d)}; rq.onerror=()=>rej(rq.error);
   });
 }
 function tx(store,mode='readonly'){return db.transaction(store,mode).objectStore(store)}
@@ -326,20 +356,28 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 // ---------- 状態 ----------
-const S={players:[],formations:[],matches:[],settings:null,board:null,selected:null,page:'board',viewAt:null}; // viewAt: 交代後の並びを見ている交代のID（保存しない）
+const S={players:[],formations:[],matches:[],opponents:[],settings:null,board:null,selected:null,selOpp:null,page:'board',viewAt:null,
+  draw:false,dash:false,curve:false}; // viewAt: 交代後の並びを見ている交代のID / draw: 矢印を描くモード（いずれも保存しない）
 function defaultSettings(){return {teamName:'',kits:clone(DEFAULT_KITS),display:'number'}}
 function newBoard(size=11,tplName){
   const name=tplName||Object.keys(TPL[size])[0];
   const pieces=TPL[size][name].map(([role,x,y])=>({role,x,y,playerId:null}));
-  return {size,tpl:name,kit:'home',pieces,showOpp:false,oppColor:'#1d4ed8',opp:mirror(pieces),showBall:false,ball:{x:34,y:52.5},src:null};
+  return {size,tpl:name,kit:'home',pieces,showOpp:false,oppColor:'#1d4ed8',oppTeamId:null,opp:mirror(pieces),showBall:false,ball:{x:34,y:52.5},arrows:[],src:null};
+}
+// 相手チームの背番号を、相手の駒に先頭から順に入れる（足りない駒は空欄）
+function applyOppTeam(b){
+  const t=b.oppTeamId&&S.opponents.find(o=>o.id===b.oppTeamId);
+  if(!t) {b.opp.forEach((o,i)=>o.n=i+1);return}
+  b.opp.forEach((o,i)=>o.n=t.numbers[i]??'');
 }
 function mirror(pieces){return pieces.map((p,i)=>({n:i+1,x:+(W-p.x).toFixed(1),y:+(H-p.y).toFixed(1)}))}
 
 async function loadAll(){
-  [S.players,S.formations,S.matches]=await Promise.all([all('players'),all('formations'),all('matches')]);
+  [S.players,S.formations,S.matches,S.opponents]=await Promise.all([all('players'),all('formations'),all('matches'),all('opponents')]);
   S.settings=Object.assign(defaultSettings(),await getMeta('settings',{}));
   S.settings.kits=Object.assign(clone(DEFAULT_KITS),S.settings.kits||{});
   S.board=await getMeta('workBoard',null)||newBoard(11);
+  if(!S.board.arrows) S.board.arrows=[];
 }
 let saveBoardTimer;
 function persistBoard(){clearTimeout(saveBoardTimer);saveBoardTimer=setTimeout(()=>setMeta('workBoard',S.board),300)}
@@ -358,6 +396,9 @@ const NS='http://www.w3.org/2000/svg';
 function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
 function drawField(){
   svg.innerHTML='';
+  const defs=el('defs',{},svg);
+  const mk=el('marker',{id:'ah',viewBox:'0 0 10 10',refX:6,refY:5,markerWidth:4.2,markerHeight:4.2,orient:'auto-start-reverse'},defs);
+  el('path',{d:'M0,0 L10,5 L0,10 z',fill:'#fff',stroke:'rgba(0,0,0,.35)','stroke-width':.8},mk);
   el('rect',{x:-3,y:-3,width:74,height:111,fill:'var(--pitch)',rx:2},svg);
   for(let i=0;i<10;i+=2) el('rect',{x:0,y:i*10.5,width:W,height:10.5,fill:'var(--pitch2)'},svg);
   const L={fill:'none',stroke:'var(--pitch-line)','stroke-width':.35};
@@ -376,12 +417,38 @@ function drawField(){
   }
 }
 function fitText(t,max){const s=String(t);return s.length>max?s.slice(0,max-1)+'…':s}
+function arrowD(a){return a.kind==='curve'?`M ${a.x1} ${a.y1} Q ${a.cx} ${a.cy} ${a.x2} ${a.y2}`:`M ${a.x1} ${a.y1} L ${a.x2} ${a.y2}`}
+function drawArrow(a,parent,temp){
+  const d=a.d||arrowD(a), dash=a.dash?'1.6 1.1':'';
+  el('path',{d,fill:'none',stroke:'rgba(0,0,0,.35)','stroke-width':1.1,'stroke-linecap':'round','stroke-dasharray':dash},parent);
+  el('path',{d,fill:'none',stroke:'#fff','stroke-width':.6,'stroke-linecap':'round','stroke-dasharray':dash,'marker-end':temp?'':'url(#ah)'},parent);
+}
+// サッカーボール（白地に黒の五角形）
+function drawBall(g){
+  const r=1.9;
+  const cid='ballclip';
+  if(!svg.querySelector('#'+cid)){const cp=el('clipPath',{id:cid},svg.querySelector('defs'));el('circle',{r},cp)}
+  el('circle',{r,fill:'#fff'},g);
+  const inner=el('g',{'clip-path':`url(#${cid})`},g);
+  const pent=(cx,cy,rr,rot)=>Array.from({length:5},(_,k)=>{const t=rot+k*2*Math.PI/5;return `${(cx+rr*Math.sin(t)).toFixed(2)},${(cy-rr*Math.cos(t)).toFixed(2)}`}).join(' ');
+  el('polygon',{points:pent(0,0,r*.36,0),fill:'#111'},inner);
+  for(let k=0;k<5;k++){
+    const t=Math.PI/5+k*2*Math.PI/5;
+    const vx=r*.36*Math.sin(t-Math.PI/5), vy=-r*.36*Math.cos(t-Math.PI/5);
+    el('line',{x1:vx.toFixed(2),y1:vy.toFixed(2),x2:(r*.78*Math.sin(t-Math.PI/5)).toFixed(2),y2:(-r*.78*Math.cos(t-Math.PI/5)).toFixed(2),stroke:'#111','stroke-width':.14},inner);
+    el('polygon',{points:pent(r*1.02*Math.sin(t),-r*1.02*Math.cos(t),r*.36,t+Math.PI),fill:'#111'},inner);
+  }
+  el('circle',{r,fill:'none',stroke:'#111','stroke-width':.18},g);
+}
 function drawPieces(){
-  svg.querySelectorAll('.piece').forEach(n=>n.remove());
+  svg.querySelectorAll('.piece,.arrows').forEach(n=>n.remove());
   const b=S.board, disp=S.settings.display;
+  const ag=el('g',{class:'arrows'},svg);
+  (b.arrows||[]).forEach(a=>drawArrow(a,ag));
   if(b.showOpp){
     b.opp.forEach((o,i)=>{
       const g=el('g',{class:'piece','data-kind':'opp','data-i':i,transform:`translate(${o.x},${o.y})`},svg);
+      if(S.selOpp===i) el('circle',{r:R+1,fill:'none',stroke:'#fde047','stroke-width':.7},g);
       el('circle',{r:R*.92,fill:b.oppColor,stroke:'#fff','stroke-width':.35},g);
       const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.6,fill:contrast(b.oppColor)},g);t.textContent=o.n;
     });
@@ -417,44 +484,85 @@ function drawPieces(){
   });
   if(b.showBall){
     const g=el('g',{class:'piece','data-kind':'ball',transform:`translate(${b.ball.x},${b.ball.y})`},svg);
-    el('circle',{r:1.25,fill:'#fff',stroke:'#111','stroke-width':.25},g);
-    el('circle',{r:.45,fill:'#111'},g);
+    drawBall(g);
   }
 }
 function contrast(hex){const h=hex.replace('#','');const r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);return (r*299+g*587+b*114)/1000>150?'#111':'#fff'}
 
-// ドラッグ
-let drag=null;
+// ドラッグ（駒の移動）と矢印の描画
+let drag=null, pen=null;
 function svgPt(ev){const pt=svg.createSVGPoint();pt.x=ev.clientX;pt.y=ev.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse())}
+const r1=v=>+v.toFixed(1);
 svg.addEventListener('pointerdown',ev=>{
-  const g=ev.target.closest('.piece'); if(!g) {if(S.selected!=null){S.selected=null;renderBoard()} return;}
+  if(S.draw){ // 矢印を描くモード: どこから始めても描く（駒は動かさない）
+    ev.preventDefault();
+    const p=svgPt(ev);
+    pen={pts:[p],g:el('g',{class:'arrows'},svg)};
+    try{svg.setPointerCapture(ev.pointerId)}catch(e){}
+    return;
+  }
+  const g=ev.target.closest('.piece');
+  if(!g){if(S.selected!=null||S.selOpp!=null){S.selected=null;S.selOpp=null;renderBoard()} return;}
   ev.preventDefault();
   const kind=g.dataset.kind, i=+g.dataset.i, p=svgPt(ev);
   if(kind==='own' && S.viewAt){toast('交代後の並びは表示のみです。直すときは「先発」に戻してください');return}
   const obj=kind==='own'?S.board.pieces[i]:kind==='opp'?S.board.opp[i]:S.board.ball;
   drag={kind,i,obj,g,dx:obj.x-p.x,dy:obj.y-p.y,moved:false,sx:ev.clientX,sy:ev.clientY};
-  svg.setPointerCapture(ev.pointerId);
+  try{svg.setPointerCapture(ev.pointerId)}catch(e){}
 });
 svg.addEventListener('pointermove',ev=>{
+  if(pen){
+    const p=svgPt(ev), last=pen.pts[pen.pts.length-1];
+    if(Math.hypot(p.x-last.x,p.y-last.y)<.4) return;
+    pen.pts.push(p);
+    const a=pen.pts[0];
+    const d=S.curve?'M '+pen.pts.map(q=>`${q.x.toFixed(1)} ${q.y.toFixed(1)}`).join(' L '):`M ${a.x} ${a.y} L ${p.x} ${p.y}`;
+    pen.g.innerHTML='';drawArrow({d,dash:S.dash},pen.g,true);
+    return;
+  }
   if(!drag) return;
   if(!drag.moved && Math.hypot(ev.clientX-drag.sx,ev.clientY-drag.sy)<5) return;
   drag.moved=true;
   const p=svgPt(ev);
-  drag.obj.x=+Math.min(W+1.5,Math.max(-1.5,p.x+drag.dx)).toFixed(1);
-  drag.obj.y=+Math.min(H+1.5,Math.max(-1.5,p.y+drag.dy)).toFixed(1);
+  drag.obj.x=r1(Math.min(W+1.5,Math.max(-1.5,p.x+drag.dx)));
+  drag.obj.y=r1(Math.min(H+1.5,Math.max(-1.5,p.y+drag.dy)));
   drag.g.setAttribute('transform',`translate(${drag.obj.x},${drag.obj.y})`);
 });
+function finishPen(){
+  const pts=pen.pts; pen.g.remove(); pen=null;
+  const a=pts[0], z=pts[pts.length-1];
+  if(Math.hypot(z.x-a.x,z.y-a.y)<2) return; // 短すぎるものは描かない
+  const arrow={id:uid('a'),dash:S.dash,kind:'line',x1:r1(a.x),y1:r1(a.y),x2:r1(z.x),y2:r1(z.y)};
+  if(S.curve){
+    // 弦から一番離れた点を通る2次ベジェにする（制御点 = 2M − (始点+終点)/2）
+    let best=null,bd=0;const L=Math.hypot(z.x-a.x,z.y-a.y);
+    for(const q of pts){const dd=Math.abs((z.x-a.x)*(a.y-q.y)-(a.x-q.x)*(z.y-a.y))/L;if(dd>bd){bd=dd;best=q}}
+    if(best&&bd>=1){arrow.kind='curve';arrow.cx=r1(2*best.x-(a.x+z.x)/2);arrow.cy=r1(2*best.y-(a.y+z.y)/2)}
+  }
+  S.board.arrows.push(arrow);persistBoard();drawPieces();
+}
 function endDrag(){
+  if(pen){finishPen();return}
   if(!drag) return;
   const d=drag; drag=null;
   if(d.moved){persistBoard();return}
   if(d.kind==='own'){
+    S.selOpp=null;
     const s=S.selected;
     if(s!=null && s!==d.i){ // 2つ目の駒をタップ → 選手を入れ替え（位置はそのまま）
       const P=S.board.pieces;[P[s].playerId,P[d.i].playerId]=[P[d.i].playerId,P[s].playerId];
       S.selected=null;persistBoard();renderBoard();return;
     }
     S.selected=(s===d.i)?null:d.i;renderBoard();
+  }
+  if(d.kind==='opp'){
+    S.selected=null;
+    const s=S.selOpp;
+    if(s!=null && s!==d.i){ // 相手の駒どうしで背番号を入れ替え
+      const O=S.board.opp;[O[s].n,O[d.i].n]=[O[d.i].n,O[s].n];
+      S.selOpp=null;persistBoard();renderBoard();return;
+    }
+    S.selOpp=(s===d.i)?null:d.i;renderBoard();
   }
 }
 svg.addEventListener('pointerup',endDrag);svg.addEventListener('pointercancel',endDrag);
@@ -470,6 +578,17 @@ function renderBoard(){
   document.getElementById('oppChk').checked=b.showOpp;
   document.getElementById('oppColor').value=b.oppColor;
   document.getElementById('ballChk').checked=b.showBall;
+  const teams=S.opponents.filter(o=>!o.deletedAt||o.id===b.oppTeamId).sort((x,y)=>x.name.localeCompare(y.name,'ja'));
+  document.getElementById('oppTeamSel').innerHTML=`<option value="">相手チーム（番号は1〜）</option>`+teams.map(o=>`<option value="${o.id}"${o.id===b.oppTeamId?' selected':''}>${esc(o.name)}</option>`).join('');
+  // 矢印
+  document.getElementById('drawBtn').classList.toggle('pri',S.draw);
+  document.getElementById('drawBtn').textContent=S.draw?'✏️ 矢印を描く（ON）':'✏️ 矢印を描く';
+  document.getElementById('drawRow').hidden=!S.draw;
+  document.querySelectorAll('#dashSeg button').forEach(x=>x.classList.toggle('on',(x.dataset.dash==='1')===S.dash));
+  document.querySelectorAll('#curveSeg button').forEach(x=>x.classList.toggle('on',(x.dataset.curve==='1')===S.curve));
+  document.getElementById('undoArrowBtn').disabled=document.getElementById('clearArrowBtn').disabled=!(b.arrows||[]).length;
+  document.getElementById('pitchHint').textContent=S.draw?'ピッチ上をドラッグして矢印を描きます（駒は動きません）。終わったら「矢印を描く」をもう一度押してください。'
+    :'駒はドラッグで移動。駒をタップで選び、控えの選手かほかの駒をタップで入れ替え。';
   // 読み込み元
   const li=document.getElementById('loadedInfo');
   if(b.src){
@@ -506,6 +625,17 @@ function renderBench(){
   const b=S.board, used=new Set(effectiveIds().filter(Boolean));
   const bench=activePlayers().filter(p=>!used.has(p.id));
   const sel=S.selected, info=document.getElementById('selInfo'), un=document.getElementById('unassignBtn');
+  const box=document.getElementById('bench');
+  if(S.selOpp!=null && b.opp[S.selOpp]){ // 相手の駒を選んでいるときは、相手の控えの背番号を出す
+    const t=b.oppTeamId&&S.opponents.find(o=>o.id===b.oppTeamId);
+    const onP=new Set(b.opp.map(o=>String(o.n)));
+    const rest=t?t.numbers.filter(n=>!onP.has(String(n))):[];
+    info.textContent=`選択中: 相手の ${b.opp[S.selOpp].n||'（空き）'} → 入れる背番号か、入れ替える相手の駒をタップ`;un.hidden=true;
+    box.innerHTML=!t?'<div class="muted">相手チームを選ぶと、登録した背番号がここに出ます（メンバー画面の「相手チーム」で登録）。</div>'
+      :rest.length?rest.map(n=>`<span class="chip" data-opp-n="${esc(n)}"><span class="num" style="background:${b.oppColor};color:${contrast(b.oppColor)}">${esc(n)}</span>${esc(t.name)}</span>`).join('')
+      :'<div class="muted">登録した背番号は全員ピッチに出ています</div>';
+    return;
+  }
   if(S.viewAt){info.textContent='この時点の控え（表示のみ）';un.hidden=true}
   else if(sel!=null){
     const p=b.pieces[sel], pl=p.playerId&&playerById(p.playerId);
@@ -513,7 +643,6 @@ function renderBench(){
     un.hidden=!pl;
   }else{info.textContent='控え（タップで空いている駒に入る）';un.hidden=true}
   const kit=S.settings.kits[b.kit];
-  const box=document.getElementById('bench');
   if(!S.players.filter(p=>!p.deletedAt).length){box.innerHTML='<div class="empty" style="width:100%">メンバー画面で選手を登録すると、ここに出ます。</div>';return}
   box.innerHTML=bench.length?bench.map(p=>{
     const k=p.pos==='GK'?S.settings.kits.gk:kit;
@@ -522,6 +651,10 @@ function renderBench(){
 }
 document.getElementById('bench').addEventListener('click',ev=>{
   const c=ev.target.closest('.chip');if(!c)return;
+  if(c.dataset.oppN!=null){
+    if(S.selOpp==null)return;
+    const v=c.dataset.oppN;S.board.opp[S.selOpp].n=/^\d+$/.test(v)?+v:v;S.selOpp=null;persistBoard();renderBoard();return;
+  }
   if(S.viewAt){toast('交代後の並びは表示のみです。直すときは「先発」に戻してください');return}
   const b=S.board;let i=S.selected;
   if(i==null){
@@ -536,8 +669,8 @@ document.getElementById('unassignBtn').onclick=()=>{if(S.selected==null)return;S
 document.getElementById('sizeSeg').onclick=ev=>{
   const s=+ev.target.dataset.size;if(!s||s===S.board.size)return;
   if(!confirm(`${s}人制に切り替えます。いまの並びは${s}人制のひな形に置き換わります（保存済みのデータは変わりません）。`))return;
-  const keep={kit:S.board.kit,showOpp:S.board.showOpp,oppColor:S.board.oppColor,showBall:S.board.showBall};
-  S.board=Object.assign(newBoard(s),keep);S.selected=null;persistBoard();renderBoard();
+  const keep={kit:S.board.kit,showOpp:S.board.showOpp,oppColor:S.board.oppColor,oppTeamId:S.board.oppTeamId,showBall:S.board.showBall};
+  S.board=Object.assign(newBoard(s),keep);applyOppTeam(S.board);S.selected=null;S.selOpp=null;persistBoard();renderBoard();
 };
 document.getElementById('tplSel').onchange=ev=>{
   const n=ev.target.value;if(!n)return;
@@ -547,8 +680,22 @@ document.getElementById('tplSel').onchange=ev=>{
   const gk=assigned.find(a=>a.gk), field=assigned.filter(a=>!a.gk);
   let fi=0;
   b.pieces=t.map(([role,x,y])=>({role,x,y,playerId:role==='GK'?(gk?gk.id:null):(field[fi++]||{}).id||null}));
-  b.tpl=n;b.opp=mirror(b.pieces);S.selected=null;persistBoard();renderBoard();
+  const oldN=b.opp.map(o=>o.n);
+  b.tpl=n;b.opp=mirror(b.pieces);b.opp.forEach((o,i)=>{if(i<oldN.length)o.n=oldN[i]}); // 相手の背番号は引き継ぐ
+  S.selected=null;S.selOpp=null;persistBoard();renderBoard();
 };
+document.getElementById('oppTeamSel').onchange=ev=>{
+  const b=S.board, t=S.opponents.find(o=>o.id===ev.target.value);
+  b.oppTeamId=t?t.id:null;
+  if(t){b.oppColor=t.color||b.oppColor;b.showOpp=true}
+  applyOppTeam(b);S.selOpp=null;persistBoard();renderBoard();
+};
+// 矢印
+document.getElementById('drawBtn').onclick=()=>{S.draw=!S.draw;S.selected=null;S.selOpp=null;renderBoard()};
+document.getElementById('dashSeg').onclick=ev=>{const d=ev.target.dataset.dash;if(d==null)return;S.dash=d==='1';renderBoard()};
+document.getElementById('curveSeg').onclick=ev=>{const c=ev.target.dataset.curve;if(c==null)return;S.curve=c==='1';renderBoard()};
+document.getElementById('undoArrowBtn').onclick=()=>{S.board.arrows.pop();persistBoard();renderBoard()};
+document.getElementById('clearArrowBtn').onclick=()=>{if(!confirm(`矢印を全部（${S.board.arrows.length}本）消します。よろしいですか？（保存済みのデータは、上書き保存するまで変わりません）`))return;S.board.arrows=[];persistBoard();renderBoard()};
 document.getElementById('dispSeg').onclick=ev=>{const d=ev.target.dataset.disp;if(!d)return;S.settings.display=d;saveSettings();renderBoard()};
 document.getElementById('kitSeg').onclick=ev=>{const k=ev.target.dataset.kit;if(!k)return;S.board.kit=k;persistBoard();renderBoard()};
 document.getElementById('oppChk').onchange=ev=>{S.board.showOpp=ev.target.checked;persistBoard();renderBoard()};
@@ -556,7 +703,7 @@ document.getElementById('oppColor').oninput=ev=>{S.board.oppColor=ev.target.valu
 document.getElementById('ballChk').onchange=ev=>{S.board.showBall=ev.target.checked;persistBoard();renderBoard()};
 document.getElementById('newBoardBtn').onclick=()=>{
   if(!confirm('新しいボードにします。いまのボードで保存していない変更は消えます（保存済みのデータは変わりません）。'))return;
-  S.board=newBoard(S.board.size);S.selected=null;persistBoard();renderBoard();
+  S.board=newBoard(S.board.size);S.selected=null;S.selOpp=null;persistBoard();renderBoard();
 };
 function boardSnapshot(){const b=clone(S.board);delete b.src;return b}
 
@@ -605,7 +752,8 @@ function openMatchDlg(m){
   editingMatch=m;
   document.getElementById('dlgMatchTitle').textContent=m?'試合の情報':'試合のフォーメーションとして保存';
   document.getElementById('mtDate').value=m?m.date:today();
-  document.getElementById('mtOpp').value=m?(m.opponent||''):'';
+  const ot=S.board.oppTeamId&&S.opponents.find(o=>o.id===S.board.oppTeamId);
+  document.getElementById('mtOpp').value=m?(m.opponent||''):(ot?ot.name:''); // 新規はボードで選んだ相手チーム名を入れておく
   document.getElementById('mtFor').value=m&&m.scoreFor!=null?m.scoreFor:'';
   document.getElementById('mtAgainst').value=m&&m.scoreAgainst!=null?m.scoreAgainst:'';
   document.getElementById('mtComp').value=m?(m.competition||''):'';
@@ -631,7 +779,8 @@ function openOnBoard(type,id){
   const dirty=!S.board.src;
   if(dirty && !confirm('ボードに読み込みます。いまのボードで保存していない変更は消えます（保存済みのデータは変わりません）。'))return;
   S.board=Object.assign(newBoard(it.board.size||11),clone(it.board),{src:{type,id}});
-  S.selected=null;S.viewAt=null;persistBoard();showPage('board');
+  if(!S.board.arrows)S.board.arrows=[];
+  S.selected=null;S.selOpp=null;S.viewAt=null;persistBoard();showPage('board');
 }
 
 // ---------- 一覧 ----------
@@ -824,6 +973,51 @@ document.getElementById('playerRows').onclick=async ev=>{
   if(t.dataset.act==='active'){p.active=t.checked;p.updatedAt=now();await put('players',p);renderBoard()}
 };
 
+// ---------- 相手チーム ----------
+// opponent = {id:'o_…', name, color, numbers:[1,3,…], createdAt, updatedAt, deletedAt?}
+function parseNums(s){
+  const out=[];for(const t of String(s).split(/[\s,、，・/]+/)){if(!t)continue;const v=/^\d+$/.test(t)?parseInt(t,10):t;if(!out.some(x=>String(x)===String(v)))out.push(v)}
+  return out;
+}
+function renderOpponents(){
+  const list=S.opponents.filter(o=>!o.deletedAt).sort((a,b)=>a.name.localeCompare(b.name,'ja'));
+  document.getElementById('oppList').innerHTML=list.length?list.map(o=>`
+    <div class="list-item">
+      <span class="num" style="display:inline-flex;align-items:center;justify-content:center;width:28px;height:28px;border-radius:50%;background:${o.color};color:${contrast(o.color)};border:1px solid var(--line);font-size:12px;font-weight:bold;flex:none">${esc(o.numbers[0]??'')}</span>
+      <div class="main"><b>${esc(o.name)}</b><span class="muted" style="white-space:normal">${o.numbers.length}人: ${o.numbers.map(esc).join(' ')}</span></div>
+      <button class="sm" data-act="edit" data-id="${o.id}">編集</button>
+    </div>`).join(''):'<div class="empty">まだありません。「＋ 追加」から登録してください。</div>';
+}
+const dlgOpp=document.getElementById('dlgOpp');let editingOpp=null;
+function oppPreview(){const n=parseNums(document.getElementById('opNums').value);document.getElementById('opPreview').textContent=n.length?`${n.length}人: ${n.join(' ')}`:''}
+function openOppDlg(o){
+  editingOpp=o;
+  document.getElementById('opTitle').textContent=o?'相手チームを編集':'相手チームを追加';
+  document.getElementById('opName').value=o?o.name:'';
+  document.getElementById('opColor').value=o?o.color:'#1d4ed8';
+  document.getElementById('opNums').value=o?o.numbers.join(' '):'';
+  oppPreview();
+  let delBtn=document.getElementById('opDel');
+  if(!delBtn){delBtn=document.createElement('button');delBtn.id='opDel';delBtn.className='danger';delBtn.textContent='削除';delBtn.style.marginRight='auto';
+    dlgOpp.querySelector('.btns').prepend(delBtn);
+    delBtn.onclick=async()=>{const q=editingOpp;if(!q)return;if(!confirm(`「${q.name}」をゴミ箱へ移します（保存済みのボードの背番号はそのまま残ります。ゴミ箱から戻せます）。`))return;
+      q.deletedAt=now();await put('opponents',q);dlgOpp.close();renderAll()}}
+  delBtn.hidden=!o;
+  dlgOpp.showModal();
+}
+document.getElementById('opNums').oninput=oppPreview;
+document.getElementById('addOppBtn').onclick=()=>openOppDlg(null);
+document.getElementById('opCancel').onclick=()=>dlgOpp.close();
+document.getElementById('opOk').onclick=async()=>{
+  const name=document.getElementById('opName').value.trim();if(!name){toast('チーム名を入れてください');return}
+  const numbers=parseNums(document.getElementById('opNums').value);
+  const data={name,color:document.getElementById('opColor').value,numbers,updatedAt:now()};
+  if(editingOpp){Object.assign(editingOpp,data);await put('opponents',editingOpp)}
+  else{const o=Object.assign({id:uid('o'),schema:SCHEMA,createdAt:now()},data);S.opponents.push(o);await put('opponents',o)}
+  dlgOpp.close();toast('保存しました');renderAll();
+};
+document.getElementById('oppList').onclick=ev=>{const b=ev.target.closest('button');if(!b)return;const o=S.opponents.find(x=>x.id===b.dataset.id);if(o)openOppDlg(o)};
+
 // ---------- 設定 ----------
 function renderSettings(){
   document.getElementById('teamName').value=S.settings.teamName||'';
@@ -846,7 +1040,8 @@ document.getElementById('kitRows').addEventListener('click',ev=>{if(ev.target.id
 function renderTrash(){
   const items=[...S.players.filter(x=>x.deletedAt).map(x=>({t:'players',l:'メンバー',n:`${x.number??''} ${x.name||''}`,x})),
     ...S.formations.filter(x=>x.deletedAt).map(x=>({t:'formations',l:'フォーメーション',n:x.name,x})),
-    ...S.matches.filter(x=>x.deletedAt).map(x=>({t:'matches',l:'試合',n:`${x.date} vs ${x.opponent||'—'}`,x}))];
+    ...S.matches.filter(x=>x.deletedAt).map(x=>({t:'matches',l:'試合',n:`${x.date} vs ${x.opponent||'—'}`,x})),
+    ...S.opponents.filter(x=>x.deletedAt).map(x=>({t:'opponents',l:'相手チーム',n:x.name,x}))];
   document.getElementById('trashList').innerHTML=items.length?items.map(i=>`<div class="list-item"><div class="main"><b>${esc(i.n)}</b><span class="muted">${i.l}・${i.x.deletedAt.slice(0,10)} 削除</span></div><button class="sm" data-t="${i.t}" data-id="${i.x.id}">戻す</button></div>`).join(''):'<div class="empty">空です</div>';
 }
 document.getElementById('trashList').onclick=async ev=>{
@@ -857,7 +1052,7 @@ document.getElementById('trashList').onclick=async ev=>{
 // ---------- バックアップ ----------
 async function exportBackup(){
   const data={app:'soccer-board',schema:SCHEMA,version:APP_VERSION,exportedAt:now(),
-    players:S.players,formations:S.formations,matches:S.matches,settings:S.settings,workBoard:S.board};
+    players:S.players,opponents:S.opponents,formations:S.formations,matches:S.matches,settings:S.settings,workBoard:S.board};
   const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
   const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
   const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`soccer-board_backup_${stamp}.json`;
@@ -877,16 +1072,20 @@ document.getElementById('importFile').onchange=async ev=>{
     const d=JSON.parse(await f.text());
     if(d.app!=='soccer-board') throw new Error('このアプリのバックアップではありません');
     pendingImport=d;
-    document.getElementById('impSummary').textContent=`${(d.exportedAt||'').slice(0,10)} の書き出し: メンバー ${d.players?.length||0}人 / フォーメーション ${d.formations?.length||0}件 / 試合 ${d.matches?.length||0}件`;
+    document.getElementById('impSummary').textContent=`${(d.exportedAt||'').slice(0,10)} の書き出し: メンバー ${d.players?.length||0}人 / 相手チーム ${d.opponents?.length||0}件 / フォーメーション ${d.formations?.length||0}件 / 試合 ${d.matches?.length||0}件`;
     document.getElementById('dlgImport').showModal();
   }catch(e){alert('読み込めませんでした: '+e.message)}
 };
 document.getElementById('impCancel').onclick=()=>{pendingImport=null;document.getElementById('dlgImport').close()};
 async function doImport(mode){
   const d=pendingImport;if(!d)return;document.getElementById('dlgImport').close();
-  const pmap={};
+  const pmap={}, omap={};
   const players=(d.players||[]).map(p=>{const q=clone(p);if(mode==='add'){q.id=uid('p');pmap[p.id]=q.id}return q});
-  const fixBoard=b=>{if(mode==='add'&&b&&b.pieces)b.pieces.forEach(p=>{if(p.playerId&&pmap[p.playerId])p.playerId=pmap[p.playerId]});return b};
+  const opps=(d.opponents||[]).map(o=>{const q=clone(o);if(mode==='add'){q.id=uid('o');omap[o.id]=q.id}return q});
+  const fixBoard=b=>{if(mode==='add'&&b){
+    if(b.pieces)b.pieces.forEach(p=>{if(p.playerId&&pmap[p.playerId])p.playerId=pmap[p.playerId]});
+    if(b.oppTeamId&&omap[b.oppTeamId])b.oppTeamId=omap[b.oppTeamId];}return b};
+  for(const o of opps)await put('opponents',o);
   const forms=(d.formations||[]).map(f=>{const q=clone(f);if(mode==='add')q.id=uid('f');fixBoard(q.board);return q});
   const matches=(d.matches||[]).map(m=>{const q=clone(m);if(mode==='add')q.id=uid('m');fixBoard(q.board);
     if(mode==='add')(q.events||[]).forEach(e=>{if(e.out&&pmap[e.out])e.out=pmap[e.out];if(e.in&&pmap[e.in])e.in=pmap[e.in]});return q});
@@ -895,7 +1094,7 @@ async function doImport(mode){
   for(const m of matches)await put('matches',m);
   if(mode==='over'&&d.settings){S.settings=Object.assign(defaultSettings(),d.settings);await saveSettings()}
   pendingImport=null;
-  await loadAll();renderAll();toast(`読み込みました（メンバー${players.length}・フォーメーション${forms.length}・試合${matches.length}）`);
+  await loadAll();renderAll();toast(`読み込みました（メンバー${players.length}・相手チーム${opps.length}・フォーメーション${forms.length}・試合${matches.length}）`);
 }
 document.getElementById('impAdd').onclick=()=>doImport('add');
 document.getElementById('impOver').onclick=()=>{if(confirm('同じIDのデータを、バックアップの内容で置き換えます。よろしいですか？（バックアップに無いデータは残ります）'))doImport('over')};
@@ -919,7 +1118,7 @@ function showPage(p){
 }
 document.querySelector('nav').onclick=ev=>{const p=ev.target.dataset.page;if(p)showPage(p)};
 function renderAllLists(){renderFormations();renderMatches()}
-function renderAll(){renderBoard();renderAllLists();renderPlayers();renderSettings()}
+function renderAll(){renderBoard();renderAllLists();renderPlayers();renderOpponents();renderSettings()}
 
 // ---------- 更新（同意してから当てる） ----------
 let waitingSW=null;
