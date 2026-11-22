@@ -1,6 +1,6 @@
 // 戦術ボード Service Worker
 // ★更新はサイレントに当てない。新しい版は待機させ、画面の「更新する」で SKIP_WAITING を受けてから切り替える。
-const CACHE='soccer-board-0.2.0';
+const CACHE='soccer-board-0.3.0';
 const FILES=['./','./index.html','./manifest.webmanifest','./icon.svg','./icon-180.png','./icon-192.png','./icon-512.png'];
 
 self.addEventListener('install',e=>{

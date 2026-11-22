@@ -84,7 +84,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 .loaded b{font-weight:bold}
 .empty{color:var(--sub);text-align:center;padding:16px 0;font-size:14px}
 .toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);background:#1c2420;color:#fff;
-  padding:9px 16px;border-radius:999px;font-size:14px;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none}
+  padding:9px 16px;border-radius:12px;font-size:14px;z-index:50;width:max-content;max-width:min(90vw,420px);text-align:center;opacity:0;transition:opacity .2s;pointer-events:none}
 .toast.show{opacity:.92}
 </style>
 </head>
@@ -277,7 +277,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <script>
 'use strict';
-const APP_VERSION='0.2.0';
+const APP_VERSION='0.3.0';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -326,7 +326,7 @@ const clone=o=>JSON.parse(JSON.stringify(o));
 const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 // ---------- 状態 ----------
-const S={players:[],formations:[],matches:[],settings:null,board:null,selected:null,page:'board'};
+const S={players:[],formations:[],matches:[],settings:null,board:null,selected:null,page:'board',viewAt:null}; // viewAt: 交代後の並びを見ている交代のID（保存しない）
 function defaultSettings(){return {teamName:'',kits:clone(DEFAULT_KITS),display:'number'}}
 function newBoard(size=11,tplName){
   const name=tplName||Object.keys(TPL[size])[0];
@@ -386,11 +386,13 @@ function drawPieces(){
       const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.6,fill:contrast(b.oppColor)},g);t.textContent=o.n;
     });
   }
+  const eff=effectiveIds();
   b.pieces.forEach((p,i)=>{
-    const k=kitFor(p,b), pl=p.playerId?playerById(p.playerId):null;
+    const k=kitFor(p,b), pl=eff[i]?playerById(eff[i]):null;
     const g=el('g',{class:'piece','data-kind':'own','data-i':i,transform:`translate(${p.x},${p.y})`},svg);
     const sel=S.selected===i;
     if(sel) el('circle',{r:R+1.1,fill:'none',stroke:'#fde047','stroke-width':.7},g);
+    g._subbed=eff[i]!==p.playerId;
     let numTxt=pl?(pl.number??''):'', nameTxt=pl?(pl.name||''):'';
     if(disp==='name' && pl){
       const label=fitText(nameTxt||String(numTxt),6);
@@ -408,6 +410,10 @@ function drawPieces(){
         const n=el('text',{'text-anchor':'middle','dominant-baseline':'central',y:R+1.8,'font-size':2.05,fill:'#fff'},g);n.textContent=lbl;
       }
     }
+    if(g._subbed){ // 途中から入った選手の印
+      el('circle',{cx:R*.9,cy:-R*.9,r:1.45,fill:'#16a34a',stroke:'#fff','stroke-width':.3},g);
+      const a=el('text',{x:R*.9,y:-R*.9,'text-anchor':'middle','dominant-baseline':'central','font-size':2,fill:'#fff'},g);a.textContent='↑';
+    }
   });
   if(b.showBall){
     const g=el('g',{class:'piece','data-kind':'ball',transform:`translate(${b.ball.x},${b.ball.y})`},svg);
@@ -424,6 +430,7 @@ svg.addEventListener('pointerdown',ev=>{
   const g=ev.target.closest('.piece'); if(!g) {if(S.selected!=null){S.selected=null;renderBoard()} return;}
   ev.preventDefault();
   const kind=g.dataset.kind, i=+g.dataset.i, p=svgPt(ev);
+  if(kind==='own' && S.viewAt){toast('交代後の並びは表示のみです。直すときは「先発」に戻してください');return}
   const obj=kind==='own'?S.board.pieces[i]:kind==='opp'?S.board.opp[i]:S.board.ball;
   drag={kind,i,obj,g,dx:obj.x-p.x,dy:obj.y-p.y,moved:false,sx:ev.clientX,sy:ev.clientY};
   svg.setPointerCapture(ev.pointerId);
@@ -468,19 +475,39 @@ function renderBoard(){
   if(b.src){
     const src=b.src.type==='formation'?S.formations.find(f=>f.id===b.src.id):S.matches.find(m=>m.id===b.src.id);
     if(src && !src.deletedAt){
-      li.innerHTML=b.src.type==='formation'?`フォーメーション <b>${esc(src.name)}</b> を編集中`
-        :`試合 <b>${esc(src.date)} vs ${esc(src.opponent||'—')}</b> を編集中（先発の並び） <button class="sm" id="liEvents">経過${evSummary(src)?'（'+evSummary(src)+'）':''}</button>`;
-      const lb=document.getElementById('liEvents');if(lb)lb.onclick=()=>openEventsDlg(src);
+      if(b.src.type==='formation'){S.viewAt=null;li.innerHTML=`フォーメーション <b>${esc(src.name)}</b> を編集中`}
+      else{
+        const subs=sortedEvents(src).filter(e=>e.type==='sub');
+        if(S.viewAt && !subs.some(e=>e.id===S.viewAt)) S.viewAt=null;
+        li.innerHTML=`試合 <b>${esc(src.date)} vs ${esc(src.opponent||'—')}</b> を編集中 <button class="sm" id="liEvents">経過${evSummary(src)?'（'+evSummary(src)+'）':''}</button>`
+          +(subs.length?`<div class="row" style="margin-top:6px"><span>並び</span><select id="viewAtSel" class="grow"><option value="">先発</option>${
+            subs.map(e=>`<option value="${e.id}"${e.id===S.viewAt?' selected':''}>${e.min==null?'':e.min+"' "}${esc(plLabel(e.out))} → ${esc(plLabel(e.in))} の後</option>`).join('')}</select></div>`
+            +(S.viewAt?`<div class="muted" style="margin-top:4px">交代後の並び（表示のみ）。位置や選手を直すときは「先発」に戻してください。</div>`:''):'');
+        document.getElementById('liEvents').onclick=()=>openEventsDlg(src);
+        const vs=document.getElementById('viewAtSel');if(vs)vs.onchange=()=>{S.viewAt=vs.value||null;S.selected=null;renderBoard()};
+      }
     }
-    else {b.src=null;li.textContent='新しいボード（未保存）'}
-  } else li.textContent='新しいボード（未保存）';
+    else {b.src=null;S.viewAt=null;li.textContent='新しいボード（未保存）'}
+  } else {S.viewAt=null;li.textContent='新しいボード（未保存）'}
   drawField();drawPieces();renderBench();
 }
+// 試合の交代を「viewAt の交代まで」当てたときの、駒ごとの選手ID（ボード自体は書き換えない）
+function viewMatch(){const b=S.board;return b.src&&b.src.type==='match'?S.matches.find(m=>m.id===b.src.id):null}
+function effectiveIds(){
+  const ids=S.board.pieces.map(p=>p.playerId), m=viewMatch();
+  if(!S.viewAt||!m) return ids;
+  for(const e of sortedEvents(m)){
+    if(e.type==='sub'){const i=ids.indexOf(e.out);if(i>=0)ids[i]=e.in}
+    if(e.id===S.viewAt) break;
+  }
+  return ids;
+}
 function renderBench(){
-  const b=S.board, used=new Set(b.pieces.map(p=>p.playerId).filter(Boolean));
+  const b=S.board, used=new Set(effectiveIds().filter(Boolean));
   const bench=activePlayers().filter(p=>!used.has(p.id));
   const sel=S.selected, info=document.getElementById('selInfo'), un=document.getElementById('unassignBtn');
-  if(sel!=null){
+  if(S.viewAt){info.textContent='この時点の控え（表示のみ）';un.hidden=true}
+  else if(sel!=null){
     const p=b.pieces[sel], pl=p.playerId&&playerById(p.playerId);
     info.textContent=`選択中: ${p.role}${pl?`（${pl.number??''} ${pl.name||''}）`:'（空き）'} → 控えの選手か、入れ替えるピッチ上の駒をタップ`;
     un.hidden=!pl;
@@ -495,6 +522,7 @@ function renderBench(){
 }
 document.getElementById('bench').addEventListener('click',ev=>{
   const c=ev.target.closest('.chip');if(!c)return;
+  if(S.viewAt){toast('交代後の並びは表示のみです。直すときは「先発」に戻してください');return}
   const b=S.board;let i=S.selected;
   if(i==null){
     const pl=playerById(c.dataset.id);
@@ -603,7 +631,7 @@ function openOnBoard(type,id){
   const dirty=!S.board.src;
   if(dirty && !confirm('ボードに読み込みます。いまのボードで保存していない変更は消えます（保存済みのデータは変わりません）。'))return;
   S.board=Object.assign(newBoard(it.board.size||11),clone(it.board),{src:{type,id}});
-  S.selected=null;persistBoard();showPage('board');
+  S.selected=null;S.viewAt=null;persistBoard();showPage('board');
 }
 
 // ---------- 一覧 ----------
@@ -704,7 +732,7 @@ function renderEvents(){
     <div class="list-item" style="align-items:flex-start">
       <div style="min-width:2.6em;font-weight:bold">${e.min==null?'—':e.min+"'"}</div>
       <div class="main" style="white-space:normal">${e.type==='sub'
-        ?`<b style="white-space:normal">🔁 ${esc(plLabel(e.out))} → ${esc(plLabel(e.in))}</b>${e.text?`<span class="muted">${esc(e.text)}</span>`:''}`
+        ?`<b style="white-space:normal">🔁 ${esc(plLabel(e.out))} → ${esc(plLabel(e.in))}</b>${e.text?`<span class="muted">${esc(e.text)}</span>`:''}<button class="sm" data-act="view" data-id="${e.id}" style="margin-top:4px">この後の並びをボードで見る</button>`
         :`<span style="white-space:pre-wrap">📝 ${esc(e.text)}</span>`}</div>
       <div style="display:flex;flex-direction:column;gap:4px">
         <button class="sm" data-act="edit" data-id="${e.id}">編集</button>
@@ -714,7 +742,7 @@ function renderEvents(){
 }
 document.getElementById('evTypeSeg').onclick=ev=>{const t=ev.target.dataset.t;if(t)setEvType(t)};
 document.getElementById('evCancelEdit').onclick=resetEvForm;
-document.getElementById('evClose').onclick=()=>{dlgEvents.close();renderMatches()};
+document.getElementById('evClose').onclick=()=>{dlgEvents.close();renderMatches();renderBoard()};
 document.getElementById('evAdd').onclick=async()=>{
   const mv=document.getElementById('evMin').value, min=mv===''?null:Math.max(0,parseInt(mv,10)||0);
   const text=document.getElementById('evText').value.trim();
@@ -733,6 +761,12 @@ document.getElementById('evAdd').onclick=async()=>{
 };
 document.getElementById('evList').onclick=async ev=>{
   const b=ev.target.closest('button');if(!b)return;const e=(evMatch.events||[]).find(x=>x.id===b.dataset.id);if(!e)return;
+  if(b.dataset.act==='view'){
+    const m=evMatch;dlgEvents.close();renderMatches();
+    if(!(S.board.src&&S.board.src.type==='match'&&S.board.src.id===m.id)) openOnBoard('match',m.id);
+    if(S.board.src&&S.board.src.id===m.id){S.viewAt=e.id;S.selected=null;showPage('board')}
+    return;
+  }
   if(b.dataset.act==='edit'){
     evEditing=e;setEvType(e.type);
     document.getElementById('evMin').value=e.min??'';document.getElementById('evText').value=e.text||'';
