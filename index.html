@@ -61,6 +61,10 @@ label.chk{display:inline-flex;align-items:center;gap:4px}
 .piece{cursor:grab}
 .piece text{pointer-events:none;font-weight:bold}
 .bench{display:flex;flex-wrap:wrap;gap:6px}
+.bench-group{display:flex;align-items:flex-start;gap:8px;width:100%}
+.bench-group+.bench-group{border-top:1px solid var(--line);padding-top:6px}
+.bench-pos{flex:none;width:4.2em;font-size:12px;font-weight:bold;color:var(--sub);padding-top:7px}
+.bench-chips{display:flex;flex-wrap:wrap;gap:6px;flex:1;min-width:0}
 .chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 4px;background:var(--card);cursor:pointer;font-size:14px}
 .chip .num{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:50%;font-size:12px;font-weight:bold}
 .list-item{display:flex;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
@@ -168,11 +172,12 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <!-- 試合 -->
 <section class="page" id="p-matches">
+  <button class="pri" id="newMatchBtn" style="width:100%;margin-bottom:10px;padding:12px;font-size:16px">＋ 新しい試合を記録する</button>
   <div class="card">
     <div class="row" style="justify-content:space-between"><div class="title-line">試合の記録</div><span class="muted" id="matchSummary"></span></div>
     <div id="matchList"></div>
   </div>
-  <p class="muted">ボード画面で「保存…」→「試合のフォーメーションとして保存」で、日付・スコアとともに追加できます。</p>
+  <p class="muted">「記録する」で、その試合をボードに開きます（試合の時計・交代・メモ・並びの確認）。ボード画面の「保存…」→「試合のフォーメーションとして保存」からも追加できます。</p>
 </section>
 
 <!-- メンバー -->
@@ -264,6 +269,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 <dialog id="dlgMatch">
   <h3 id="dlgMatchTitle">試合のフォーメーションとして保存</h3>
   <label class="f"><span>日付</span><input type="date" id="mtDate"></label>
+  <label class="f" id="mtBaseBox" hidden><span>先発の並び</span><select id="mtBase"></select></label>
   <label class="f"><span>対戦相手</span><input type="text" id="mtOpp" placeholder="例: ○○FC"></label>
   <div class="f"><span>スコア（自チーム − 相手）</span>
     <div class="row"><input type="number" id="mtFor" min="0" inputmode="numeric"> − <input type="number" id="mtAgainst" min="0" inputmode="numeric"> <span class="muted">未入力なら「未定」</span></div></div>
@@ -334,7 +340,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <script>
 'use strict';
-const APP_VERSION='0.7.2';
+const APP_VERSION='0.8.0';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -429,8 +435,19 @@ function ownSides(){return S.settings.kits}
 const svg=document.getElementById('pitch');
 const NS='http://www.w3.org/2000/svg';
 function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
+// 相手を出さないときは自陣（下半分）だけを映す。自チームの駒・ボール・矢印が上にはみ出していれば、そこまで広げる
+function viewTop(){
+  const b=S.board;if(b.showOpp) return -3;
+  let y=H/2-9.15-2.5; // センターサークルが入るところまで
+  for(const p of b.pieces) y=Math.min(y,p.y-R-1.5);
+  if(b.showBall) y=Math.min(y,b.ball.y-3);
+  for(const a of b.arrows||[]) y=Math.min(y,a.y1-2,a.y2-2,a.kind==='curve'?(a.y1+2*a.cy+a.y2)/4-2:Infinity);
+  return Math.max(-3,Math.floor(y));
+}
 function drawField(){
   svg.innerHTML='';
+  const top=viewTop();S.viewTop=top;
+  svg.setAttribute('viewBox',`-3 ${top} 74 ${108-top}`);
   const defs=el('defs',{},svg);
   const mk=el('marker',{id:'ah',viewBox:'0 0 10 10',refX:6,refY:5,markerWidth:4.2,markerHeight:4.2,orient:'auto-start-reverse'},defs);
   el('path',{d:'M0,0 L10,5 L0,10 z',fill:'#fff',stroke:'rgba(0,0,0,.35)','stroke-width':.8},mk);
@@ -577,7 +594,7 @@ svg.addEventListener('pointermove',ev=>{
   drag.moved=true;
   const p=svgPt(ev);
   drag.obj.x=r1(Math.min(W+1.5,Math.max(-1.5,p.x+drag.dx)));
-  drag.obj.y=r1(Math.min(H+1.5,Math.max(-1.5,p.y+drag.dy)));
+  drag.obj.y=r1(Math.min(H+1.5,Math.max(Math.max(-1.5,(S.viewTop??-3)+R),p.y+drag.dy)));
   drag.g.setAttribute('transform',`translate(${drag.obj.x},${drag.obj.y})`);
 });
 function finishPen(){
@@ -823,9 +840,13 @@ function renderBench(){
   }else{info.textContent='控え（タップで空いている駒に入る）';un.hidden=true}
   const kit=S.settings.kits[b.kit];
   if(!S.players.filter(p=>!p.deletedAt).length){box.innerHTML='<div class="empty" style="width:100%">メンバー画面で選手を登録すると、ここに出ます。</div>';return}
-  box.innerHTML=bench.length?bench.map(p=>{
+  const chip=p=>{
     const k=p.pos==='GK'?S.settings.kits.gk:kit;
-    return `<span class="chip" data-id="${p.id}"><span class="num" style="background:${k.shirt};color:${k.text};border:1px solid var(--line)">${esc(p.number??'')}</span>${esc(p.name||'')}</span>`}).join('')
+    return `<span class="chip" data-id="${p.id}"><span class="num" style="background:${k.shirt};color:${k.text};border:1px solid var(--line)">${esc(p.number??'')}</span>${esc(p.name||'')}</span>`};
+  // ポジション別（GK→DF→MF→FW→未設定）。各グループの中は背番号順
+  const groups=[['GK','GK'],['DF','DF'],['MF','MF'],['FW','FW'],['','位置なし']]
+    .map(([pos,label])=>[label,bench.filter(p=>pos?p.pos===pos:!['GK','DF','MF','FW'].includes(p.pos))]).filter(([,ps])=>ps.length);
+  box.innerHTML=bench.length?groups.map(([label,ps])=>`<div class="bench-group"><span class="bench-pos">${label}</span><div class="bench-chips">${ps.map(chip).join('')}</div></div>`).join('')
     :'<div class="muted">全員ピッチに出ています</div>';
 }
 document.getElementById('bench').addEventListener('click',ev=>{
@@ -902,6 +923,7 @@ document.getElementById('svOverwrite').onclick=async()=>{
 };
 document.getElementById('svForm').onclick=()=>{dlgSave.close();openFormDlg(null)};
 document.getElementById('svMatch').onclick=()=>{dlgSave.close();openMatchDlg(null)};
+document.getElementById('newMatchBtn').onclick=()=>openMatchDlg(null,true);
 
 // フォーメーションのダイアログ
 const dlgForm=document.getElementById('dlgForm');let editingForm=null;
@@ -927,9 +949,19 @@ document.getElementById('fmOk').onclick=async()=>{
 // 試合のダイアログ
 const dlgMatch=document.getElementById('dlgMatch');let editingMatch=null;
 function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
-function openMatchDlg(m){
-  editingMatch=m;
-  document.getElementById('dlgMatchTitle').textContent=m?'試合の情報':'試合のフォーメーションとして保存';
+let matchFromTab=false; // 「試合」タブの「新しい試合を記録する」から開いたとき
+function openMatchDlg(m,fromTab=false){
+  editingMatch=m;matchFromTab=!m&&fromTab;
+  document.getElementById('dlgMatchTitle').textContent=m?'試合の情報':matchFromTab?'新しい試合':'試合のフォーメーションとして保存';
+  // 新しい試合は、先発の並びを「いまのボード」か保存したフォーメーションから選ぶ
+  document.getElementById('mtBaseBox').hidden=!matchFromTab;
+  document.getElementById('mtOk').textContent=matchFromTab?'記録を始める':'保存';
+  if(matchFromTab){
+    const b=S.board, cur=b.src&&b.src.type==='formation'&&S.formations.find(f=>f.id===b.src.id);
+    const fs=S.formations.filter(f=>!f.deletedAt).sort((a,c)=>c.updatedAt.localeCompare(a.updatedAt));
+    document.getElementById('mtBase').innerHTML=`<option value="">いまのボード（${b.size}人制・${esc(b.tpl||'')}${cur?'・'+esc(cur.name):''}）</option>`
+      +fs.map(f=>`<option value="${f.id}">フォーメーション: ${esc(f.name)}（${f.board.size}人制）</option>`).join('');
+  }
   document.getElementById('mtDate').value=m?m.date:today();
   const ot=S.board.oppTeamId&&S.opponents.find(o=>o.id===S.board.oppTeamId);
   document.getElementById('mtOpp').value=m?(m.opponent||''):(ot?ot.name:''); // 新規はボードで選んだ相手チーム名を入れておく
@@ -947,10 +979,22 @@ document.getElementById('mtOk').onclick=async()=>{
     competition:document.getElementById('mtComp').value.trim(),memo:document.getElementById('mtMemo').value,updatedAt:now()};
   if(editingMatch){Object.assign(editingMatch,data);await put('matches',editingMatch)}
   else{
-    const m=Object.assign({id:uid('m'),schema:SCHEMA,board:boardSnapshot(),createdAt:now()},data);
-    S.matches.push(m);await put('matches',m);S.board.src={type:'match',id:m.id};persistBoard();
+    let base=null;
+    if(matchFromTab){
+      const fid=document.getElementById('mtBase').value, f=fid&&S.formations.find(x=>x.id===fid);
+      if(f){
+        if(!S.board.src && !confirm('いまのボードは保存していません。フォーメーションから始めると、いまのボードの変更は消えます（保存済みのデータは変わりません）。'))return;
+        base=Object.assign(newBoard(f.board.size||11),clone(f.board));delete base.src;if(!base.arrows)base.arrows=[];
+      }
+    }
+    const m=Object.assign({id:uid('m'),schema:SCHEMA,board:base||boardSnapshot(),createdAt:now()},data);
+    S.matches.push(m);await put('matches',m);
+    if(base) S.board=Object.assign(clone(base),{src:{type:'match',id:m.id}}); // 試合の記録とは別の写しにする
+    else S.board.src={type:'match',id:m.id};
+    S.selected=null;S.selOpp=null;S.viewAt=null;persistBoard();
   }
-  dlgMatch.close();toast('保存しました');renderAllLists();renderBoard();
+  dlgMatch.close();toast('保存しました');renderAllLists();
+  if(matchFromTab){matchFromTab=false;showPage('board')}else renderBoard();
 };
 
 function openOnBoard(type,id){
@@ -997,7 +1041,7 @@ function renderMatches(){
       <div class="main"><span class="muted">${esc(m.date)}</span><b>vs ${esc(m.opponent||'—')}</b><span class="muted">${m.board.size}人制・${m.board.kit==='away'?'アウェイ':'ホーム'}キット${m.competition?'・'+esc(m.competition):''}</span>${evSummary(m)?`<span class="muted">${evSummary(m)}</span>`:''}</div>
       <div class="score ${c}">${m.scoreFor==null?'−':m.scoreFor} - ${m.scoreAgainst==null?'−':m.scoreAgainst}<div style="font-size:11px">${r}</div></div>
       <div style="display:flex;flex-direction:column;gap:4px">
-        <button class="sm pri" data-act="open" data-id="${m.id}">開く</button>
+        <button class="sm pri" data-act="open" data-id="${m.id}">記録する</button>
         <button class="sm" data-act="events" data-id="${m.id}">経過</button>
         <button class="sm" data-act="edit" data-id="${m.id}">編集</button>
         <button class="sm danger" data-act="del" data-id="${m.id}">削除</button>
