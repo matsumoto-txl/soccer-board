@@ -74,6 +74,7 @@ table{width:100%;border-collapse:collapse}
 th,td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
 th{color:var(--sub);font-weight:normal;font-size:12px;white-space:nowrap}
 td button{white-space:nowrap}
+#playerRows td{white-space:nowrap} #playerRows td.nm{white-space:normal;word-break:break-all}
 .kitrow{display:grid;grid-template-columns:5.5em 1fr 1fr 44px;gap:8px;align-items:center;margin-bottom:8px}
 .kitrow input[type=color]{width:100%;height:34px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px}
 .banner{position:sticky;top:0;z-index:30;background:#fef3c7;color:#713f12;border-bottom:1px solid #f59e0b;padding:10px 12px;font-size:14px}
@@ -180,11 +181,23 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
       <div class="title-line">チームメンバー</div>
       <button class="pri sm" id="addPlayerBtn">＋ 追加</button>
     </div>
-    <table><thead><tr><th style="width:3.5em">背番号</th><th>名前</th><th style="width:3.2em">学年</th><th style="width:3.2em">位置</th><th style="width:3.5em">在籍</th><th style="width:3.5em"></th></tr></thead>
+    <div id="bulkBar" class="row" hidden style="background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:8px;padding:6px 8px;margin-bottom:6px">
+      <b id="bulkCount"></b>
+      <span>学年を</span><select id="bulkGrade" class="grow"></select>
+      <button class="sm pri" id="bulkApply">一括で変更</button>
+      <button class="sm" id="bulkClear">選択を解除</button>
+    </div>
+    <table><thead><tr><th style="width:1.8em"><input type="checkbox" id="selAll" title="すべて選択"></th><th style="width:3.2em">背番号</th><th>名前</th><th style="width:3.6em">学年</th><th style="width:2.6em">位置</th><th style="width:2.6em">在籍</th><th style="width:3.2em"></th></tr></thead>
     <tbody id="playerRows"></tbody></table>
     <div id="playerEmpty" class="empty" hidden>まだメンバーがいません。「＋ 追加」から登録してください。</div>
   </div>
-  <p class="muted">在籍を外した選手は控えに出なくなります（保存済みのボードには残ります）。</p>
+  <p class="muted">在籍を外した選手は控えに出なくなります（保存済みのボードには残ります）。左のチェックで選ぶと、学年を一括で変更できます。</p>
+  <div class="card">
+    <div class="title-line">学年</div>
+    <div id="gradeList"></div>
+    <div class="row"><input type="text" id="gradeNew" class="grow" placeholder="例: 15回生 / 1年 / U-12"><button class="sm pri" id="gradeAdd">追加</button></div>
+  </div>
+  <p class="muted">ここで登録した学年を、メンバーの学年として選べます。上から順に選択肢に並びます。</p>
   <div class="card">
     <div class="row" style="justify-content:space-between">
       <div class="title-line">相手チーム</div>
@@ -290,12 +303,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
   <h3 id="plTitle">メンバー</h3>
   <label class="f"><span>背番号</span><input type="number" id="plNum" min="0" max="99" inputmode="numeric"></label>
   <label class="f"><span>名前（ボードに出す名前）</span><input type="text" id="plName" placeholder="例: 山田"></label>
-  <label class="f"><span>学年</span><select id="plGrade"><option value="">—</option>
-    <optgroup label="幼児"><option>年少</option><option>年中</option><option>年長</option></optgroup>
-    <optgroup label="小学生"><option>小1</option><option>小2</option><option>小3</option><option>小4</option><option>小5</option><option>小6</option></optgroup>
-    <optgroup label="中学生"><option>中1</option><option>中2</option><option>中3</option></optgroup>
-    <optgroup label="高校生"><option>高1</option><option>高2</option><option>高3</option></optgroup>
-    <optgroup label="その他"><option>大学</option><option>社会人</option></optgroup></select></label>
+  <label class="f"><span>学年（メンバー画面の「学年」で登録したものから選ぶ）</span><select id="plGrade"></select></label>
   <label class="f"><span>位置</span><select id="plPos"><option value="">—</option><option>GK</option><option>DF</option><option>MF</option><option>FW</option></select></label>
   <div class="btns"><button id="plCancel">キャンセル</button><button class="pri" id="plOk">保存</button></div>
 </dialog>
@@ -315,7 +323,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <script>
 'use strict';
-const APP_VERSION='0.5.0';
+const APP_VERSION='0.6.1';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -368,7 +376,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 // ---------- 状態 ----------
 const S={players:[],formations:[],matches:[],opponents:[],settings:null,board:null,selected:null,selOpp:null,page:'board',viewAt:null,
   draw:false,dash:false,curve:false}; // viewAt: 交代後の並びを見ている交代のID / draw: 矢印を描くモード（いずれも保存しない）
-function defaultSettings(){return {teamName:'',kits:clone(DEFAULT_KITS),display:'number'}}
+function defaultSettings(){return {teamName:'',kits:clone(DEFAULT_KITS),display:'number',grades:[]}} // grades: 学年のマスター（文字列・上から順）
 function newBoard(size=11,tplName){
   const name=tplName||Object.keys(TPL[size])[0];
   const pieces=TPL[size][name].map(([role,x,y])=>({role,x,y,playerId:null}));
@@ -384,8 +392,14 @@ function mirror(pieces){return pieces.map((p,i)=>({n:i+1,x:+(W-p.x).toFixed(1),y
 
 async function loadAll(){
   [S.players,S.formations,S.matches,S.opponents]=await Promise.all([all('players'),all('formations'),all('matches'),all('opponents')]);
-  S.settings=Object.assign(defaultSettings(),await getMeta('settings',{}));
+  const savedSettings=await getMeta('settings',{});
+  S.settings=Object.assign(defaultSettings(),savedSettings);
   S.settings.kits=Object.assign(clone(DEFAULT_KITS),S.settings.kits||{});
+  // 学年マスターが無い版（v0.5.0 以前）から来たときは、メンバーに入っている学年をそのままマスターに入れる（消さない・変えない）
+  if(!Array.isArray(savedSettings.grades)){
+    S.settings.grades=[...new Set(S.players.filter(p=>p.grade).map(p=>p.grade))];
+    await setMeta('settings',S.settings);
+  }
   S.board=await getMeta('workBoard',null)||newBoard(11);
   if(!S.board.arrows) S.board.arrows=[];
 }
@@ -426,6 +440,8 @@ function drawField(){
     el('rect',{x:W/2-3.66,y:top?-1.6:H,width:7.32,height:1.6,fill:'none',stroke:'var(--pitch-line)','stroke-width':.35},svg);
   }
 }
+// 描いた文字の実際の幅（測れないときは目安の幅）
+function textW(t,fallback){try{const w=t.getComputedTextLength();return w>0?w:fallback}catch(e){return fallback}}
 function fitText(t,max){const s=String(t);return s.length>max?s.slice(0,max-1)+'…':s}
 function arrowD(a){return a.kind==='curve'?`M ${a.x1} ${a.y1} Q ${a.cx} ${a.cy} ${a.x2} ${a.y2}`:`M ${a.x1} ${a.y1} L ${a.x2} ${a.y2}`}
 function drawArrow(a,parent,temp){
@@ -486,19 +502,20 @@ function drawPieces(){
     g._subbed=eff[i]!==p.playerId;
     let numTxt=pl?(pl.number??''):'', nameTxt=pl?(pl.name||''):'';
     if(disp==='name' && pl){
+      // 名前は背番号（2.9）に近い大きさで出す。枠の幅は実際の文字幅に合わせる
       const label=fitText(nameTxt||String(numTxt),6);
-      const w=Math.max(R*2,label.length*2.35+2.2);
-      el('rect',{x:-w/2,y:-R*.8,width:w,height:R*1.6,rx:R*.8,fill:k.shirt,stroke:'rgba(0,0,0,.45)','stroke-width':.3},g);
-      const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.3,fill:k.text},g);t.textContent=label;
+      const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.75,fill:k.text},g);t.textContent=label;
+      const tw=textW(t,label.length*2.75), w=Math.max(R*2,tw+2), h=R*1.8;
+      g.insertBefore(el('rect',{x:-w/2,y:-h/2,width:w,height:h,rx:h/2,fill:k.shirt,stroke:'rgba(0,0,0,.45)','stroke-width':.3}),t);
     }else{
       el('circle',{r:R,fill:pl?k.shirt:'rgba(255,255,255,.18)',stroke:pl?'rgba(0,0,0,.45)':'#fff','stroke-width':.3,'stroke-dasharray':pl?'':'1 .7'},g);
       const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:2,fill:pl?k.text:'#fff'},g);
       t.textContent=pl?numTxt:p.role;
       if(disp==='both' && pl && nameTxt){
-        const lbl=fitText(nameTxt,7);
-        const tw=lbl.length*2.1+1.6;
-        el('rect',{x:-tw/2,y:R+.35,width:tw,height:2.9,rx:.6,fill:'rgba(0,0,0,.55)'},g);
-        const n=el('text',{'text-anchor':'middle','dominant-baseline':'central',y:R+1.8,'font-size':2.05,fill:'#fff'},g);n.textContent=lbl;
+        const lbl=fitText(nameTxt,7), fs=2.55, bh=3.4;
+        const n=el('text',{'text-anchor':'middle','dominant-baseline':'central',y:R+.35+bh/2,'font-size':fs,fill:'#fff'},g);n.textContent=lbl;
+        const tw=textW(n,lbl.length*fs)+1.4;
+        g.insertBefore(el('rect',{x:-tw/2,y:R+.35,width:tw,height:bh,rx:.7,fill:'rgba(0,0,0,.6)'}),n);
       }
     }
     if(g._subbed){ // 途中から入った選手の印
@@ -955,14 +972,86 @@ document.getElementById('evList').onclick=async ev=>{
 };
 
 // ---------- メンバー ----------
+const picked=new Set(); // 一括変更で選んでいるメンバーのID（保存しない）
+// 学年の選択肢。マスターに無い学年（今の値）も消さずに選択肢へ残す
+function gradeOptions(current,blankLabel='—'){
+  const g=S.settings.grades||[];
+  let h=`<option value="">${blankLabel}</option>`+g.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
+  if(current&&!g.includes(current)) h+=`<option value="${esc(current)}">${esc(current)}（学年の一覧に無い）</option>`;
+  return h;
+}
 function renderPlayers(){
   const list=S.players.filter(p=>!p.deletedAt).sort((a,b)=>(a.number??999)-(b.number??999));
+  for(const id of [...picked]) if(!list.some(p=>p.id===id)) picked.delete(id);
   document.getElementById('playerEmpty').hidden=!!list.length;
   document.getElementById('playerRows').innerHTML=list.map(p=>`<tr>
-    <td><b>${esc(p.number??'')}</b></td><td>${esc(p.name||'')}</td><td>${esc(p.grade||'')}</td><td>${esc(p.pos||'')}</td>
+    <td><input type="checkbox" data-act="pick" data-id="${p.id}" ${picked.has(p.id)?'checked':''}></td>
+    <td><b>${esc(p.number??'')}</b></td><td class="nm">${esc(p.name||'')}</td><td>${esc(p.grade||'')}</td><td>${esc(p.pos||'')}</td>
     <td><input type="checkbox" data-act="active" data-id="${p.id}" ${p.active!==false?'checked':''}></td>
     <td><button class="sm" data-act="edit" data-id="${p.id}">編集</button></td></tr>`).join('');
+  renderBulkBar(list);renderGrades();
 }
+function renderBulkBar(list){
+  list=list||S.players.filter(p=>!p.deletedAt);
+  const n=picked.size, bar=document.getElementById('bulkBar'), all=document.getElementById('selAll');
+  const justOpened=bar.hidden&&n>0; // 出したばかりのときは「選んでください」から始める
+  bar.hidden=!n;
+  all.checked=n>0&&n===list.length;all.indeterminate=n>0&&n<list.length;
+  if(n){document.getElementById('bulkCount').textContent=`${n}人`;
+    const sel=document.getElementById('bulkGrade'),keep=sel.value;
+    sel.innerHTML='<option value="__pick" selected>選んでください</option>'+gradeOptions('', '（空欄にする）');
+    if(!justOpened&&[...sel.options].some(o=>o.value===keep))sel.value=keep;}
+}
+document.getElementById('selAll').onchange=ev=>{
+  const list=S.players.filter(p=>!p.deletedAt);
+  picked.clear();if(ev.target.checked)list.forEach(p=>picked.add(p.id));renderPlayers();
+};
+document.getElementById('bulkClear').onclick=()=>{picked.clear();renderPlayers()};
+document.getElementById('bulkApply').onclick=async()=>{
+  const g=document.getElementById('bulkGrade').value, targets=S.players.filter(p=>picked.has(p.id));
+  if(!targets.length)return;
+  if(g==='__pick'){toast('変更先の学年を選んでください');return}
+  if(!confirm(`${targets.length}人の学年を「${g||'空欄'}」に変更します。よろしいですか？`))return;
+  for(const p of targets){p.grade=g;p.updatedAt=now();await put('players',p)}
+  picked.clear();toast(`${targets.length}人の学年を変更しました`);renderPlayers();
+};
+// 学年マスター
+function renderGrades(){
+  const g=S.settings.grades||[], cnt=x=>S.players.filter(p=>!p.deletedAt&&p.grade===x).length;
+  document.getElementById('gradeList').innerHTML=g.length?g.map((x,i)=>`
+    <div class="list-item"><div class="main"><b>${esc(x)}</b><span class="muted">${cnt(x)}人</span></div>
+      <button class="sm" data-g="up" data-i="${i}" ${i?'':'disabled'}>↑</button>
+      <button class="sm" data-g="down" data-i="${i}" ${i<g.length-1?'':'disabled'}>↓</button>
+      <button class="sm" data-g="rename" data-i="${i}">名前</button>
+      <button class="sm danger" data-g="del" data-i="${i}">削除</button>
+    </div>`).join(''):'<div class="empty">まだありません。下の欄に入れて「追加」してください。</div>';
+}
+document.getElementById('gradeAdd').onclick=async()=>{
+  const inp=document.getElementById('gradeNew'), v=inp.value.trim();if(!v)return;
+  if(S.settings.grades.includes(v)){toast('同じ学年がすでにあります');return}
+  S.settings.grades.push(v);await saveSettings();inp.value='';renderPlayers();
+};
+document.getElementById('gradeNew').onkeydown=ev=>{if(ev.key==='Enter'&&!ev.isComposing)document.getElementById('gradeAdd').click()};
+document.getElementById('gradeList').onclick=async ev=>{
+  const b=ev.target.closest('button');if(!b)return;
+  const g=S.settings.grades, i=+b.dataset.i, x=g[i];
+  if(b.dataset.g==='up'&&i>0){[g[i-1],g[i]]=[g[i],g[i-1]]}
+  if(b.dataset.g==='down'&&i<g.length-1){[g[i+1],g[i]]=[g[i],g[i+1]]}
+  if(b.dataset.g==='rename'){
+    const v=(prompt(`「${x}」の新しい名前`,x)||'').trim();if(!v||v===x)return;
+    if(g.includes(v)){toast('同じ学年がすでにあります');return}
+    const users=S.players.filter(p=>p.grade===x);
+    g[i]=v;
+    for(const p of users){p.grade=v;p.updatedAt=now();await put('players',p)} // 名前を変えたら、その学年のメンバーも合わせて変える
+    if(users.length)toast(`${users.length}人の学年も「${v}」に変えました`);
+  }
+  if(b.dataset.g==='del'){
+    const n=S.players.filter(p=>!p.deletedAt&&p.grade===x).length;
+    if(!confirm(`学年「${x}」を一覧から外します。${n?`この学年の${n}人は、学年「${x}」のまま残ります（あとで変更できます）。`:''}`))return;
+    g.splice(i,1);
+  }
+  await saveSettings();renderPlayers();
+};
 const dlgPlayer=document.getElementById('dlgPlayer');let editingPlayer=null;
 function openPlayerDlg(p){
   editingPlayer=p;
@@ -970,6 +1059,7 @@ function openPlayerDlg(p){
   document.getElementById('plNum').value=p&&p.number!=null?p.number:'';
   document.getElementById('plName').value=p?(p.name||''):'';
   document.getElementById('plPos').value=p?(p.pos||''):'';
+  document.getElementById('plGrade').innerHTML=gradeOptions(p?p.grade:'');
   document.getElementById('plGrade').value=p?(p.grade||''):'';
   let delBtn=document.getElementById('plDel');
   if(!delBtn){delBtn=document.createElement('button');delBtn.id='plDel';delBtn.className='danger';delBtn.textContent='削除';delBtn.style.marginRight='auto';
@@ -995,6 +1085,7 @@ document.getElementById('plOk').onclick=async()=>{
 document.getElementById('playerRows').onclick=async ev=>{
   const t=ev.target;const p=S.players.find(x=>x.id===t.dataset.id);if(!p)return;
   if(t.dataset.act==='edit') openPlayerDlg(p);
+  if(t.dataset.act==='pick'){if(t.checked)picked.add(p.id);else picked.delete(p.id);renderBulkBar();return}
   if(t.dataset.act==='active'){p.active=t.checked;p.updatedAt=now();await put('players',p);renderBoard()}
 };
 
@@ -1118,6 +1209,10 @@ async function doImport(mode){
   for(const f of forms)await put('formations',f);
   for(const m of matches)await put('matches',m);
   if(mode==='over'&&d.settings){S.settings=Object.assign(defaultSettings(),d.settings);await saveSettings()}
+  // 読み込んだ学年を、学年の一覧に足す（今の一覧は消さない）
+  S.settings.grades=S.settings.grades||[];
+  for(const x of [...((d.settings&&d.settings.grades)||[]),...players.map(p=>p.grade).filter(Boolean)]) if(!S.settings.grades.includes(x)) S.settings.grades.push(x);
+  await saveSettings();
   pendingImport=null;
   await loadAll();renderAll();toast(`読み込みました（メンバー${players.length}・相手チーム${opps.length}・フォーメーション${forms.length}・試合${matches.length}）`);
 }
