@@ -116,6 +116,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 <!-- ボード -->
 <section class="page on" id="p-board">
   <div id="loadedInfo" class="loaded"></div>
+  <div id="clockCard" class="card" hidden></div>
   <div class="card">
     <div class="row">
       <div class="seg" id="sizeSeg"><button data-size="11">11人制</button><button data-size="8">8人制</button></div>
@@ -271,6 +272,16 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
   <div class="btns"><button id="mtCancel">キャンセル</button><button class="pri" id="mtOk">保存</button></div>
 </dialog>
 
+<dialog id="dlgClockFix">
+  <h3 id="cfTitle">キックオフの時間を合わせる</h3>
+  <label class="chk" style="margin-bottom:6px"><input type="radio" name="cfMode" value="elapsed" checked> いまの経過時間で合わせる</label>
+  <div class="row" style="margin:0 0 10px 22px"><input type="number" id="cfMin" min="0" max="150" inputmode="numeric" style="width:4.5em"> 分 <input type="number" id="cfSec" min="0" max="59" inputmode="numeric" style="width:4em"> 秒 経過</div>
+  <label class="chk" style="margin-bottom:6px"><input type="radio" name="cfMode" value="clock"> キックオフした時刻で合わせる</label>
+  <div class="row" style="margin:0 0 6px 22px"><input type="time" id="cfTime" step="60"></div>
+  <div class="muted" id="cfNote"></div>
+  <div class="btns"><button id="cfCancel">キャンセル</button><button class="pri" id="cfOk">合わせる</button></div>
+</dialog>
+
 <dialog id="dlgOpp">
   <h3 id="opTitle">相手チーム</h3>
   <label class="f"><span>チーム名</span><input type="text" id="opName" placeholder="例: 青葉FC"></label>
@@ -323,7 +334,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <script>
 'use strict';
-const APP_VERSION='0.6.1';
+const APP_VERSION='0.7.1';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -648,9 +659,136 @@ function renderBoard(){
       }
     }
     else {b.src=null;S.viewAt=null;li.textContent='新しいボード（未保存）'}
-  } else {S.viewAt=null;li.textContent='新しいボード（未保存）'}
+  } else {S.viewAt=null;li.innerHTML='新しいボード（未保存）<div class="muted" style="margin-top:2px">「保存…」→「試合のフォーメーションとして保存」すると、試合の時計と経過の記録が使えます。</div>'}
+  renderClock();
   drawField();drawPieces();renderBench();
 }
+// ---------- 試合の時計 ----------
+// match.clock = {half:分, n:本数, periods:[{s:開始ms, e:終了ms|null}]}（後方互換の追加項目）
+// 時刻（ms）で持つので、アプリを閉じても・画面が消えても、開き直せば正しい時間が出る
+const fmtMS=ms=>{const neg=ms<0;ms=Math.abs(ms);const t=Math.floor(ms/1000);return (neg?'-':'')+`${Math.floor(t/60)}:${String(t%60).padStart(2,'0')}`};
+function periodName(i,n){return n===2?['前半','後半'][i]:n===1?'試合':`第${i+1}ピリオド`}
+function clockState(m){
+  const c=m&&m.clock;
+  if(!c||!c.periods.length) return {phase:'before',i:0};
+  const P=c.periods,i=P.length-1,last=P[i];
+  if(last.e==null) return {phase:'running',i,el:Date.now()-last.s};
+  if(P.length>=c.n) return {phase:'done',i};
+  return {phase:'break',i,el:last.e-last.s,since:Date.now()-last.e};
+}
+// 経過の記録に使う「何分」。前半の 12:34 → 13分、後半（20分ハーフ）の 3:10 → 24分
+function currentMinute(m){
+  const st=clockState(m);if(!m||!m.clock)return null;
+  if(st.phase==='running') return m.clock.half*st.i+Math.floor(st.el/60000)+1;
+  if(st.phase==='break') return m.clock.half*(st.i+1);
+  return null;
+}
+function clockHTML(m){
+  const c=m.clock,st=clockState(m),n=c.n,half=c.half*60000;
+  if(st.phase==='before') return `<div class="muted">キックオフ前</div>`;
+  if(st.phase==='running'){
+    const rest=half-st.el, over=rest<0;
+    return `<div style="font-size:13px" class="muted">${periodName(st.i,n)}</div>
+      <div style="display:flex;gap:16px;align-items:baseline;flex-wrap:wrap">
+        <div><span class="muted" style="font-size:12px">経過</span> <b style="font-size:30px;font-variant-numeric:tabular-nums">${fmtMS(st.el)}</b></div>
+        <div><span class="muted" style="font-size:12px">${over?'追加タイム':'残り'}</span> <b style="font-size:30px;font-variant-numeric:tabular-nums;color:${over?'var(--danger)':'inherit'}">${over?'+'+fmtMS(-rest):fmtMS(rest)}</b></div>
+      </div>`;
+  }
+  const done=c.periods.map((p,i)=>`${periodName(i,n)} ${fmtMS(p.e-p.s)}`).join('　');
+  if(st.phase==='break') return `<div><b>${periodName(st.i,n)}終了</b>　<span class="muted">${done}</span></div>
+      <div style="margin-top:2px"><span class="muted" style="font-size:12px">休憩</span> <b style="font-size:22px;font-variant-numeric:tabular-nums">${fmtMS(st.since)}</b></div>`;
+  return `<div><b>試合終了</b>　<span class="muted">${done}</span></div>`;
+}
+function renderClock(){
+  const card=document.getElementById('clockCard'), m=viewMatch();
+  if(!m||m.deletedAt){card.hidden=true;return}
+  card.hidden=false;
+  if(!m.clock) m.clock={half:S.settings.lastHalf||20,n:S.settings.lastPeriods||2,periods:[]};
+  const c=m.clock,st=clockState(m),n=c.n;
+  let btn='';
+  if(st.phase==='before') btn=`<button class="pri" data-ck="start">⏱ キックオフ</button>`;
+  else if(st.phase==='running') btn=`<button class="pri" data-ck="end">${st.i===n-1?'試合終了':periodName(st.i,n)+'終了'}</button>`;
+  else if(st.phase==='break') btn=`<button class="pri" data-ck="start">⏱ ${periodName(st.i+1,n)}キックオフ</button>`;
+  card.innerHTML=`<div class="row" style="justify-content:space-between">
+      <div class="title-line" style="margin:0">試合の時計</div>
+      <div class="row" style="margin:0;gap:4px">${st.phase==='before'
+        ?`<input type="number" id="ckHalf" min="1" max="60" value="${c.half}" style="width:4em" inputmode="numeric"> 分 ×
+          <select id="ckN">${[1,2,3,4].map(k=>`<option value="${k}"${k===n?' selected':''}>${k}本</option>`).join('')}</select>`
+        :`<span class="muted">${c.half}分 × ${n}本</span>`}</div>
+    </div>
+    <div id="ckDisp" style="margin:8px 0">${clockHTML(m)}</div>
+    <div class="row">${btn}
+      ${st.phase==='before'||st.phase==='break'?`<button class="sm" data-ck="late">押し忘れた（途中から始める）</button>`:''}
+      ${st.phase==='running'?`<button class="sm" data-ck="fix">時間を直す</button>`:''}
+      ${c.periods.length?`<button class="sm" data-ck="undo">1つ戻す</button>`:''}</div>`;
+}
+// キックオフを押し忘れたとき・押すのが遅れたとき: 経過時間か、キックオフした時刻で開始時刻を合わせる
+const dlgClockFix=document.getElementById('dlgClockFix');let cfMode=null; // 'late'=これから始める本 / 'fix'=動いている本を直す
+const hhmm=d=>`${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
+function openClockFix(mode){
+  const m=viewMatch();if(!m)return;cfMode=mode;
+  const c=m.clock,st=clockState(m),idx=mode==='late'?c.periods.length:st.i;
+  document.getElementById('cfTitle').textContent=`${periodName(idx,c.n)}のキックオフの時間を合わせる`;
+  const el=mode==='fix'?st.el:0;
+  document.getElementById('cfMin').value=mode==='fix'?Math.floor(el/60000):'';
+  document.getElementById('cfSec').value=mode==='fix'?Math.floor(el/1000)%60:'';
+  document.getElementById('cfTime').value=hhmm(new Date(Date.now()-el));
+  document.querySelector('input[name=cfMode][value=elapsed]').checked=true;
+  document.getElementById('cfNote').textContent=mode==='late'?'合わせると、その時間からもう時計が進んだ状態で始まります。':'';
+  dlgClockFix.showModal();
+}
+document.getElementById('cfMin').oninput=document.getElementById('cfSec').oninput=()=>{document.querySelector('input[name=cfMode][value=elapsed]').checked=true};
+document.getElementById('cfTime').oninput=()=>{document.querySelector('input[name=cfMode][value=clock]').checked=true};
+document.getElementById('cfCancel').onclick=()=>dlgClockFix.close();
+document.getElementById('cfOk').onclick=async()=>{
+  const m=viewMatch();if(!m)return;const P=m.clock.periods, nowMs=Date.now();
+  let s;
+  if(document.querySelector('input[name=cfMode]:checked').value==='elapsed'){
+    const mi=parseInt(document.getElementById('cfMin').value||'0',10)||0, se=parseInt(document.getElementById('cfSec').value||'0',10)||0;
+    if(mi<0||se<0||se>59){toast('経過時間を正しく入れてください');return}
+    s=nowMs-(mi*60+se)*1000;
+  }else{
+    const v=document.getElementById('cfTime').value;if(!v){toast('時刻を入れてください');return}
+    const [h,mm]=v.split(':').map(Number);const d=new Date();d.setHours(h,mm,0,0);s=d.getTime();
+    if(s>nowMs){toast('まだ来ていない時刻です');return}
+  }
+  // 前の本の終わりより前にはできない
+  const prev=cfMode==='late'?P[P.length-1]:P[P.length-2];
+  if(prev&&prev.e!=null&&s<prev.e){toast('前の本が終わった時刻より前にはできません');return}
+  if(cfMode==='late') P.push({s,e:null}); else P[P.length-1].s=s;
+  await saveClock(m);dlgClockFix.close();renderClock();toast('時間を合わせました');
+};
+async function saveClock(m){m.updatedAt=now();await put('matches',m)}
+document.getElementById('clockCard').addEventListener('change',async ev=>{
+  const m=viewMatch();if(!m||!m.clock||m.clock.periods.length)return;
+  if(ev.target.id==='ckHalf'){const v=Math.max(1,Math.min(60,parseInt(ev.target.value,10)||20));m.clock.half=v;S.settings.lastHalf=v}
+  if(ev.target.id==='ckN'){const v=+ev.target.value;m.clock.n=v;S.settings.lastPeriods=v}
+  saveSettings();await saveClock(m);renderClock();
+});
+document.getElementById('clockCard').addEventListener('click',async ev=>{
+  const b=ev.target.closest('button[data-ck]');if(!b)return;
+  const m=viewMatch();if(!m)return;const c=m.clock,P=c.periods,st=clockState(m);
+  if(b.dataset.ck==='late'||b.dataset.ck==='fix'){openClockFix(b.dataset.ck);return}
+  if(b.dataset.ck==='start'){P.push({s:Date.now(),e:null})}
+  if(b.dataset.ck==='end'){
+    if(st.i===c.n-1&&!confirm('試合終了にしますか？（間違えたときは「1つ戻す」で戻せます）'))return;
+    P[P.length-1].e=Date.now();
+  }
+  if(b.dataset.ck==='undo'){
+    const last=P[P.length-1];
+    const what=last.e!=null?`${periodName(P.length-1,c.n)}終了`:`${periodName(P.length-1,c.n)}のキックオフ`;
+    if(!confirm(`「${what}」を取り消しますか？`))return;
+    if(last.e!=null) last.e=null; else P.pop(); // 終了を取り消すと、そのまま時計が続く
+  }
+  await saveClock(m);renderClock();
+});
+// 1秒ごとに表示だけ更新する（時計が動いている・休憩中のとき）
+setInterval(()=>{
+  if(S.page!=='board'||document.hidden)return;
+  const m=viewMatch(),d=document.getElementById('ckDisp');if(!m||!m.clock||!d)return;
+  const ph=clockState(m).phase;if(ph==='running'||ph==='break')d.innerHTML=clockHTML(m);
+},1000);
+
 // 試合の交代を「viewAt の交代まで」当てたときの、駒ごとの選手ID（ボード自体は書き換えない）
 function viewMatch(){const b=S.board;return b.src&&b.src.type==='match'?S.matches.find(m=>m.id===b.src.id):null}
 function effectiveIds(){
@@ -912,7 +1050,7 @@ function fillSubSelects(sel){
 }
 function resetEvForm(){
   evEditing=null;setEvType(evType);
-  document.getElementById('evMin').value='';document.getElementById('evText').value='';
+  document.getElementById('evMin').value=currentMinute(evMatch)??'';document.getElementById('evText').value=''; // 時計が動いていれば、いまの分を入れておく
   document.getElementById('evAdd').textContent='追加';document.getElementById('evCancelEdit').hidden=true;
   fillSubSelects(null);
 }
