@@ -1,0 +1,799 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>戦術ボード</title>
+<meta name="theme-color" content="#14532d">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="戦術ボード">
+<style>
+:root{
+  --bg:#f4f5f2; --card:#fff; --ink:#1c2420; --sub:#5f6b64; --line:#d9ded9;
+  --accent:#15803d; --accent-ink:#fff; --warn:#b45309; --danger:#b91c1c;
+  --pitch:#2f8f46; --pitch2:#2a8240; --pitch-line:rgba(255,255,255,.85);
+}
+@media (prefers-color-scheme: dark){
+  :root{ --bg:#111613; --card:#1a211d; --ink:#e7ece8; --sub:#9aa79f; --line:#2c3630;
+    --accent:#22a356; --pitch:#24703a; --pitch2:#206434; }
+}
+*{box-sizing:border-box}
+html,body{margin:0;background:var(--bg);color:var(--ink);
+  font-family:"游ゴシック","Yu Gothic",YuGothic,"Hiragino Sans",system-ui,sans-serif;font-size:15px;-webkit-text-size-adjust:100%}
+header{position:sticky;top:0;z-index:20;background:var(--accent);color:var(--accent-ink);
+  padding:calc(env(safe-area-inset-top) + 8px) 12px 0}
+header h1{margin:0 0 6px;font-size:17px;display:flex;align-items:center;gap:8px}
+header h1 small{font-weight:normal;opacity:.8;font-size:12px}
+nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+nav::-webkit-scrollbar{display:none}
+nav button{flex:1 0 auto;background:transparent;border:0;color:var(--accent-ink);opacity:.75;
+  padding:8px 6px;font-size:13.5px;border-bottom:3px solid transparent;font-family:inherit}
+nav button.on{opacity:1;border-bottom-color:#fff;font-weight:bold}
+main{max-width:760px;margin:0 auto;padding:12px 12px calc(env(safe-area-inset-bottom) + 40px)}
+section.page{display:none} section.page.on{display:block}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:12px;margin-bottom:12px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.row + .row{margin-top:8px}
+.grow{flex:1}
+button,select,input,textarea{font-family:inherit;font-size:15px}
+button{border:1px solid var(--line);background:var(--card);color:var(--ink);border-radius:8px;padding:7px 12px;cursor:pointer}
+button.pri{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:bold}
+button.danger{color:var(--danger);border-color:var(--danger)}
+button.sm{padding:4px 9px;font-size:13px}
+button:disabled{opacity:.45;cursor:default}
+select,input[type=text],input[type=number],input[type=date],textarea{border:1px solid var(--line);background:var(--card);color:var(--ink);
+  border-radius:8px;padding:7px 8px}
+input[type=number]{width:5em}
+label.chk{display:inline-flex;align-items:center;gap:4px}
+.seg{display:inline-flex;border:1px solid var(--line);border-radius:8px;overflow:hidden}
+.seg button{border:0;border-radius:0;padding:6px 10px}
+.seg button.on{background:var(--accent);color:var(--accent-ink)}
+.muted{color:var(--sub);font-size:13px}
+.title-line{font-weight:bold;font-size:14px;margin-bottom:6px}
+#pitchWrap{position:relative;max-width:520px;margin:0 auto;touch-action:none}
+#pitch{width:100%;display:block;border-radius:8px;user-select:none;-webkit-user-select:none}
+.piece{cursor:grab}
+.piece text{pointer-events:none;font-weight:bold}
+.bench{display:flex;flex-wrap:wrap;gap:6px}
+.chip{display:inline-flex;align-items:center;gap:5px;border:1px solid var(--line);border-radius:999px;padding:4px 10px 4px 4px;background:var(--card);cursor:pointer;font-size:14px}
+.chip .num{display:inline-flex;align-items:center;justify-content:center;min-width:24px;height:24px;border-radius:50%;font-size:12px;font-weight:bold}
+.list-item{display:flex;gap:8px;align-items:center;padding:9px 0;border-bottom:1px solid var(--line)}
+.list-item:last-child{border-bottom:0}
+.list-item .main{flex:1;min-width:0}
+.list-item .main .muted{display:block}
+.list-item .main b{display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.score{font-weight:bold;font-size:17px;min-width:4.2em;text-align:center}
+.res-w{color:var(--accent)} .res-l{color:var(--danger)} .res-d{color:var(--sub)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;font-size:14px}
+th{color:var(--sub);font-weight:normal;font-size:12px}
+.kitrow{display:grid;grid-template-columns:5.5em 1fr 1fr 44px;gap:8px;align-items:center;margin-bottom:8px}
+.kitrow input[type=color]{width:100%;height:34px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px}
+.banner{position:sticky;top:0;z-index:30;background:#fef3c7;color:#713f12;border-bottom:1px solid #f59e0b;padding:10px 12px;font-size:14px}
+.banner .row{margin-top:6px}
+dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:16px;width:min(92vw,420px)}
+dialog::backdrop{background:rgba(0,0,0,.4)}
+dialog h3{margin:0 0 10px;font-size:16px}
+dialog .f{display:flex;flex-direction:column;gap:4px;margin-bottom:10px}
+dialog .f span{font-size:12px;color:var(--sub)}
+dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
+.loaded{font-size:13px;padding:6px 10px;border-radius:8px;background:color-mix(in srgb,var(--accent) 12%,transparent);margin-bottom:8px}
+.loaded b{font-weight:bold}
+.empty{color:var(--sub);text-align:center;padding:16px 0;font-size:14px}
+.toast{position:fixed;left:50%;bottom:calc(env(safe-area-inset-bottom) + 20px);transform:translateX(-50%);background:#1c2420;color:#fff;
+  padding:9px 16px;border-radius:999px;font-size:14px;z-index:50;opacity:0;transition:opacity .2s;pointer-events:none}
+.toast.show{opacity:.92}
+</style>
+</head>
+<body>
+<div id="updateBanner" class="banner" hidden>
+  新しいバージョンがあります（更新前にバックアップ推奨）
+  <div class="row"><button class="sm" id="bnBackup">バックアップを書き出す</button><button class="sm pri" id="bnUpdate">更新する</button></div>
+</div>
+<div id="backupBanner" class="banner" hidden>
+  <span id="backupMsg"></span>
+  <div class="row"><button class="sm pri" id="bbBackup">今すぐバックアップ</button><button class="sm" id="bbLater">あとで</button></div>
+</div>
+<header>
+  <h1>⚽ 戦術ボード <small id="teamNameH"></small></h1>
+  <nav>
+    <button data-page="board" class="on">ボード</button>
+    <button data-page="formations">フォーメーション</button>
+    <button data-page="matches">試合</button>
+    <button data-page="members">メンバー</button>
+    <button data-page="settings">設定</button>
+  </nav>
+</header>
+<main>
+<!-- ボード -->
+<section class="page on" id="p-board">
+  <div id="loadedInfo" class="loaded"></div>
+  <div class="card">
+    <div class="row">
+      <div class="seg" id="sizeSeg"><button data-size="11">11人制</button><button data-size="8">8人制</button></div>
+      <select id="tplSel" class="grow"></select>
+    </div>
+    <div class="row">
+      <div class="seg" id="dispSeg"><button data-disp="number">背番号</button><button data-disp="name">名前</button><button data-disp="both">両方</button></div>
+      <div class="seg" id="kitSeg"><button data-kit="home">ホーム</button><button data-kit="away">アウェイ</button></div>
+    </div>
+    <div class="row">
+      <label class="chk"><input type="checkbox" id="oppChk"> 相手を表示</label>
+      <label class="chk">相手の色 <input type="color" id="oppColor" value="#1d4ed8"></label>
+      <label class="chk"><input type="checkbox" id="ballChk"> ボール</label>
+    </div>
+  </div>
+  <div id="pitchWrap"><svg id="pitch" viewBox="-3 -3 74 111" xmlns="http://www.w3.org/2000/svg"></svg></div>
+  <p class="muted" style="text-align:center;margin:6px 0 10px">駒はドラッグで移動。駒をタップで選び、控えの選手かほかの駒をタップで入れ替え。</p>
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="title-line" id="selInfo">控え（タップで空いている駒に入る）</div>
+      <button class="sm" id="unassignBtn" hidden>この駒から外す</button>
+    </div>
+    <div class="bench" id="bench"></div>
+  </div>
+  <div class="row">
+    <button class="pri" id="saveBtn">保存…</button>
+    <button id="newBoardBtn">新しいボード</button>
+  </div>
+</section>
+
+<!-- フォーメーション -->
+<section class="page" id="p-formations">
+  <div class="card">
+    <div class="title-line">保存したフォーメーション</div>
+    <div id="formList"></div>
+  </div>
+  <p class="muted">ボード画面で「保存…」→「フォーメーションとして保存」で追加できます。</p>
+</section>
+
+<!-- 試合 -->
+<section class="page" id="p-matches">
+  <div class="card">
+    <div class="row" style="justify-content:space-between"><div class="title-line">試合の記録</div><span class="muted" id="matchSummary"></span></div>
+    <div id="matchList"></div>
+  </div>
+  <p class="muted">ボード画面で「保存…」→「試合のフォーメーションとして保存」で、日付・スコアとともに追加できます。</p>
+</section>
+
+<!-- メンバー -->
+<section class="page" id="p-members">
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <div class="title-line">チームメンバー</div>
+      <button class="pri sm" id="addPlayerBtn">＋ 追加</button>
+    </div>
+    <table><thead><tr><th style="width:3.5em">背番号</th><th>名前</th><th style="width:3.5em">位置</th><th style="width:3.5em">在籍</th><th style="width:3.5em"></th></tr></thead>
+    <tbody id="playerRows"></tbody></table>
+    <div id="playerEmpty" class="empty" hidden>まだメンバーがいません。「＋ 追加」から登録してください。</div>
+  </div>
+  <p class="muted">在籍を外した選手は控えに出なくなります（保存済みのボードには残ります）。</p>
+</section>
+
+<!-- 設定 -->
+<section class="page" id="p-settings">
+  <div class="card">
+    <div class="title-line">チーム</div>
+    <div class="row"><input type="text" id="teamName" class="grow" placeholder="チーム名"></div>
+  </div>
+  <div class="card">
+    <div class="title-line">ユニフォームの色</div>
+    <div class="kitrow muted"><span></span><span>シャツ</span><span>文字</span><span></span></div>
+    <div id="kitRows"></div>
+  </div>
+  <div class="card">
+    <div class="title-line">バックアップ</div>
+    <p class="muted" style="margin:0 0 8px">データはこの端末の中だけに保存されています。機種変更や消失に備えて、ときどき書き出してください。</p>
+    <div class="row">
+      <button class="pri" id="exportBtn">書き出す（JSON）</button>
+      <button id="importBtn">読み込む</button>
+      <input type="file" id="importFile" accept="application/json,.json" hidden>
+    </div>
+    <p class="muted" id="lastBackup" style="margin:8px 0 0"></p>
+  </div>
+  <div class="card">
+    <div class="title-line">ゴミ箱</div>
+    <div id="trashList"></div>
+  </div>
+  <div class="card">
+    <div class="row" style="justify-content:space-between">
+      <span class="muted">バージョン <span id="verLbl"></span></span>
+      <button class="sm" id="checkUpdBtn">更新を確認</button>
+    </div>
+  </div>
+</section>
+</main>
+
+<!-- 保存ダイアログ -->
+<dialog id="dlgSave">
+  <h3>保存</h3>
+  <div id="saveChoices" style="display:flex;flex-direction:column;gap:8px">
+    <button id="svOverwrite" class="pri">上書き保存</button>
+    <button id="svForm">フォーメーションとして保存（新規）</button>
+    <button id="svMatch">試合のフォーメーションとして保存（新規）</button>
+  </div>
+  <div class="btns"><button id="svCancel">キャンセル</button></div>
+</dialog>
+
+<dialog id="dlgForm">
+  <h3 id="dlgFormTitle">フォーメーションとして保存</h3>
+  <label class="f"><span>名前</span><input type="text" id="fmName" placeholder="例: 4-4-2 基本"></label>
+  <label class="f"><span>メモ</span><textarea id="fmMemo" rows="2"></textarea></label>
+  <div class="btns"><button id="fmCancel">キャンセル</button><button class="pri" id="fmOk">保存</button></div>
+</dialog>
+
+<dialog id="dlgMatch">
+  <h3 id="dlgMatchTitle">試合のフォーメーションとして保存</h3>
+  <label class="f"><span>日付</span><input type="date" id="mtDate"></label>
+  <label class="f"><span>対戦相手</span><input type="text" id="mtOpp" placeholder="例: ○○FC"></label>
+  <div class="f"><span>スコア（自チーム − 相手）</span>
+    <div class="row"><input type="number" id="mtFor" min="0" inputmode="numeric"> − <input type="number" id="mtAgainst" min="0" inputmode="numeric"> <span class="muted">未入力なら「未定」</span></div></div>
+  <label class="f"><span>大会・会場など</span><input type="text" id="mtComp"></label>
+  <label class="f"><span>メモ</span><textarea id="mtMemo" rows="2"></textarea></label>
+  <div class="btns"><button id="mtCancel">キャンセル</button><button class="pri" id="mtOk">保存</button></div>
+</dialog>
+
+<dialog id="dlgPlayer">
+  <h3 id="plTitle">メンバー</h3>
+  <label class="f"><span>背番号</span><input type="number" id="plNum" min="0" max="99" inputmode="numeric"></label>
+  <label class="f"><span>名前（ボードに出す名前）</span><input type="text" id="plName" placeholder="例: 山田"></label>
+  <label class="f"><span>位置</span><select id="plPos"><option value="">—</option><option>GK</option><option>DF</option><option>MF</option><option>FW</option></select></label>
+  <div class="btns"><button id="plCancel">キャンセル</button><button class="pri" id="plOk">保存</button></div>
+</dialog>
+
+<dialog id="dlgImport">
+  <h3>バックアップの読み込み</h3>
+  <p id="impSummary" style="font-size:14px"></p>
+  <p class="muted">「別IDで追加」は今のデータを消さずに追加します（同じデータが重複することがあります）。「上書き」は同じIDのデータを置き換えます。</p>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <button class="pri" id="impAdd">別IDで追加（今のデータは残す）</button>
+    <button id="impOver">上書き（同じIDを置き換え）</button>
+    <button id="impCancel">キャンセル</button>
+  </div>
+</dialog>
+
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const APP_VERSION='0.1.0';
+const SCHEMA=1;
+const W=68, H=105; // ピッチ（m）
+const R=3.1;        // 駒の半径
+
+// ---------- フォーメーションのひな形（自チームは下半分・上へ攻める） ----------
+const TPL={
+  11:{
+    '4-4-2':[['GK',34,99],['LB',9,85],['CB',26,88],['CB',42,88],['RB',59,85],['LM',9,70],['CM',26,73],['CM',42,73],['RM',59,70],['FW',26,58],['FW',42,58]],
+    '4-3-3':[['GK',34,99],['LB',9,85],['CB',26,88],['CB',42,88],['RB',59,85],['CM',18,73],['CM',34,75],['CM',50,73],['LW',11,60],['CF',34,57],['RW',57,60]],
+    '4-2-3-1':[['GK',34,99],['LB',9,85],['CB',26,88],['CB',42,88],['RB',59,85],['DM',26,77],['DM',42,77],['LM',11,66],['AM',34,66],['RM',57,66],['CF',34,56]],
+    '3-5-2':[['GK',34,99],['CB',18,87],['CB',34,89],['CB',50,87],['LWB',6,72],['CM',22,74],['DM',34,78],['CM',46,74],['RWB',62,72],['FW',26,58],['FW',42,58]],
+    '3-4-3':[['GK',34,99],['CB',18,87],['CB',34,89],['CB',50,87],['LM',8,72],['CM',26,75],['CM',42,75],['RM',60,72],['LW',12,60],['CF',34,57],['RW',56,60]],
+    '5-3-2':[['GK',34,99],['LWB',6,82],['CB',20,88],['CB',34,89],['CB',48,88],['RWB',62,82],['CM',18,73],['CM',34,75],['CM',50,73],['FW',26,58],['FW',42,58]],
+  },
+  8:{
+    '3-3-1':[['GK',34,99],['DF',14,86],['DF',34,88],['DF',54,86],['MF',14,72],['MF',34,74],['MF',54,72],['FW',34,58]],
+    '2-3-2':[['GK',34,99],['DF',22,87],['DF',46,87],['MF',12,73],['MF',34,75],['MF',56,73],['FW',24,59],['FW',44,59]],
+    '3-2-2':[['GK',34,99],['DF',14,86],['DF',34,88],['DF',54,86],['MF',24,74],['MF',44,74],['FW',24,59],['FW',44,59]],
+    '2-4-1':[['GK',34,99],['DF',22,87],['DF',46,87],['MF',8,73],['MF',26,76],['MF',42,76],['MF',60,73],['FW',34,58]],
+  }
+};
+const DEFAULT_KITS={home:{shirt:'#c81e1e',text:'#ffffff'},away:{shirt:'#ffffff',text:'#1c2420'},gk:{shirt:'#facc15',text:'#1c2420'}};
+const KIT_LABEL={home:'ホーム',away:'アウェイ',gk:'GK'};
+
+// ---------- IndexedDB ----------
+let db;
+function openDB(){
+  return new Promise((res,rej)=>{
+    const rq=indexedDB.open('soccer-board',1);
+    rq.onupgradeneeded=()=>{
+      const d=rq.result;
+      for(const s of ['players','formations','matches']) if(!d.objectStoreNames.contains(s)) d.createObjectStore(s,{keyPath:'id'});
+      if(!d.objectStoreNames.contains('meta')) d.createObjectStore('meta',{keyPath:'k'});
+    };
+    rq.onsuccess=()=>res(rq.result); rq.onerror=()=>rej(rq.error);
+  });
+}
+function tx(store,mode='readonly'){return db.transaction(store,mode).objectStore(store)}
+function all(store){return new Promise((res,rej)=>{const r=tx(store).getAll();r.onsuccess=()=>res(r.result);r.onerror=()=>rej(r.error)})}
+function put(store,obj){return new Promise((res,rej)=>{const r=tx(store,'readwrite').put(obj);r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
+async function getMeta(k,def){return new Promise(res=>{const r=tx('meta').get(k);r.onsuccess=()=>res(r.result?r.result.v:def);r.onerror=()=>res(def)})}
+function setMeta(k,v){return put('meta',{k,v})}
+const uid=p=>p+'_'+Math.random().toString(36).slice(2,10)+Date.now().toString(36).slice(-4);
+const now=()=>new Date().toISOString();
+const clone=o=>JSON.parse(JSON.stringify(o));
+const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+
+// ---------- 状態 ----------
+const S={players:[],formations:[],matches:[],settings:null,board:null,selected:null,page:'board'};
+function defaultSettings(){return {teamName:'',kits:clone(DEFAULT_KITS),display:'number'}}
+function newBoard(size=11,tplName){
+  const name=tplName||Object.keys(TPL[size])[0];
+  const pieces=TPL[size][name].map(([role,x,y])=>({role,x,y,playerId:null}));
+  return {size,tpl:name,kit:'home',pieces,showOpp:false,oppColor:'#1d4ed8',opp:mirror(pieces),showBall:false,ball:{x:34,y:52.5},src:null};
+}
+function mirror(pieces){return pieces.map((p,i)=>({n:i+1,x:+(W-p.x).toFixed(1),y:+(H-p.y).toFixed(1)}))}
+
+async function loadAll(){
+  [S.players,S.formations,S.matches]=await Promise.all([all('players'),all('formations'),all('matches')]);
+  S.settings=Object.assign(defaultSettings(),await getMeta('settings',{}));
+  S.settings.kits=Object.assign(clone(DEFAULT_KITS),S.settings.kits||{});
+  S.board=await getMeta('workBoard',null)||newBoard(11);
+}
+let saveBoardTimer;
+function persistBoard(){clearTimeout(saveBoardTimer);saveBoardTimer=setTimeout(()=>setMeta('workBoard',S.board),300)}
+function saveSettings(){return setMeta('settings',S.settings)}
+
+// ---------- 共通 ----------
+function toast(msg){const t=document.getElementById('toast');t.textContent=msg;t.classList.add('show');clearTimeout(toast._t);toast._t=setTimeout(()=>t.classList.remove('show'),1800)}
+const playerById=id=>S.players.find(p=>p.id===id);
+function activePlayers(){return S.players.filter(p=>!p.deletedAt&&p.active!==false).sort((a,b)=>(a.number??999)-(b.number??999))}
+function kitFor(piece,b){return (piece.role==='GK')?S.settings.kits.gk:S.settings.kits[b.kit||'home']}
+function ownSides(){return S.settings.kits}
+
+// ---------- ピッチ描画 ----------
+const svg=document.getElementById('pitch');
+const NS='http://www.w3.org/2000/svg';
+function el(tag,attrs,parent){const e=document.createElementNS(NS,tag);for(const k in attrs)e.setAttribute(k,attrs[k]);if(parent)parent.appendChild(e);return e}
+function drawField(){
+  svg.innerHTML='';
+  el('rect',{x:-3,y:-3,width:74,height:111,fill:'var(--pitch)',rx:2},svg);
+  for(let i=0;i<10;i+=2) el('rect',{x:0,y:i*10.5,width:W,height:10.5,fill:'var(--pitch2)'},svg);
+  const L={fill:'none',stroke:'var(--pitch-line)','stroke-width':.35};
+  el('rect',{x:0,y:0,width:W,height:H,...L},svg);
+  el('line',{x1:0,y1:H/2,x2:W,y2:H/2,...L},svg);
+  el('circle',{cx:W/2,cy:H/2,r:9.15,...L},svg);
+  el('circle',{cx:W/2,cy:H/2,r:.5,fill:'var(--pitch-line)'},svg);
+  for(const top of [true,false]){
+    const y0=top?0:H, s=top?1:-1;
+    el('rect',{x:W/2-20.16,y:top?0:H-16.5,width:40.32,height:16.5,...L},svg);
+    el('rect',{x:W/2-9.16,y:top?0:H-5.5,width:18.32,height:5.5,...L},svg);
+    el('circle',{cx:W/2,cy:y0+s*11,r:.45,fill:'var(--pitch-line)'},svg);
+    const a=Math.acos(5.5/9.15), dx=9.15*Math.sin(a);
+    el('path',{d:`M ${W/2-dx} ${y0+s*16.5} A 9.15 9.15 0 0 ${top?0:1} ${W/2+dx} ${y0+s*16.5}`,...L},svg);
+    el('rect',{x:W/2-3.66,y:top?-1.6:H,width:7.32,height:1.6,fill:'none',stroke:'var(--pitch-line)','stroke-width':.35},svg);
+  }
+}
+function fitText(t,max){const s=String(t);return s.length>max?s.slice(0,max-1)+'…':s}
+function drawPieces(){
+  svg.querySelectorAll('.piece').forEach(n=>n.remove());
+  const b=S.board, disp=S.settings.display;
+  if(b.showOpp){
+    b.opp.forEach((o,i)=>{
+      const g=el('g',{class:'piece','data-kind':'opp','data-i':i,transform:`translate(${o.x},${o.y})`},svg);
+      el('circle',{r:R*.92,fill:b.oppColor,stroke:'#fff','stroke-width':.35},g);
+      const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.6,fill:contrast(b.oppColor)},g);t.textContent=o.n;
+    });
+  }
+  b.pieces.forEach((p,i)=>{
+    const k=kitFor(p,b), pl=p.playerId?playerById(p.playerId):null;
+    const g=el('g',{class:'piece','data-kind':'own','data-i':i,transform:`translate(${p.x},${p.y})`},svg);
+    const sel=S.selected===i;
+    if(sel) el('circle',{r:R+1.1,fill:'none',stroke:'#fde047','stroke-width':.7},g);
+    let numTxt=pl?(pl.number??''):'', nameTxt=pl?(pl.name||''):'';
+    if(disp==='name' && pl){
+      const label=fitText(nameTxt||String(numTxt),6);
+      const w=Math.max(R*2,label.length*2.35+2.2);
+      el('rect',{x:-w/2,y:-R*.8,width:w,height:R*1.6,rx:R*.8,fill:k.shirt,stroke:'rgba(0,0,0,.45)','stroke-width':.3},g);
+      const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.3,fill:k.text},g);t.textContent=label;
+    }else{
+      el('circle',{r:R,fill:pl?k.shirt:'rgba(255,255,255,.18)',stroke:pl?'rgba(0,0,0,.45)':'#fff','stroke-width':.3,'stroke-dasharray':pl?'':'1 .7'},g);
+      const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:2,fill:pl?k.text:'#fff'},g);
+      t.textContent=pl?numTxt:p.role;
+      if(disp==='both' && pl && nameTxt){
+        const lbl=fitText(nameTxt,7);
+        const tw=lbl.length*2.1+1.6;
+        el('rect',{x:-tw/2,y:R+.35,width:tw,height:2.9,rx:.6,fill:'rgba(0,0,0,.55)'},g);
+        const n=el('text',{'text-anchor':'middle','dominant-baseline':'central',y:R+1.8,'font-size':2.05,fill:'#fff'},g);n.textContent=lbl;
+      }
+    }
+  });
+  if(b.showBall){
+    const g=el('g',{class:'piece','data-kind':'ball',transform:`translate(${b.ball.x},${b.ball.y})`},svg);
+    el('circle',{r:1.25,fill:'#fff',stroke:'#111','stroke-width':.25},g);
+    el('circle',{r:.45,fill:'#111'},g);
+  }
+}
+function contrast(hex){const h=hex.replace('#','');const r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);return (r*299+g*587+b*114)/1000>150?'#111':'#fff'}
+
+// ドラッグ
+let drag=null;
+function svgPt(ev){const pt=svg.createSVGPoint();pt.x=ev.clientX;pt.y=ev.clientY;return pt.matrixTransform(svg.getScreenCTM().inverse())}
+svg.addEventListener('pointerdown',ev=>{
+  const g=ev.target.closest('.piece'); if(!g) {if(S.selected!=null){S.selected=null;renderBoard()} return;}
+  ev.preventDefault();
+  const kind=g.dataset.kind, i=+g.dataset.i, p=svgPt(ev);
+  const obj=kind==='own'?S.board.pieces[i]:kind==='opp'?S.board.opp[i]:S.board.ball;
+  drag={kind,i,obj,g,dx:obj.x-p.x,dy:obj.y-p.y,moved:false,sx:ev.clientX,sy:ev.clientY};
+  svg.setPointerCapture(ev.pointerId);
+});
+svg.addEventListener('pointermove',ev=>{
+  if(!drag) return;
+  if(!drag.moved && Math.hypot(ev.clientX-drag.sx,ev.clientY-drag.sy)<5) return;
+  drag.moved=true;
+  const p=svgPt(ev);
+  drag.obj.x=+Math.min(W+1.5,Math.max(-1.5,p.x+drag.dx)).toFixed(1);
+  drag.obj.y=+Math.min(H+1.5,Math.max(-1.5,p.y+drag.dy)).toFixed(1);
+  drag.g.setAttribute('transform',`translate(${drag.obj.x},${drag.obj.y})`);
+});
+function endDrag(){
+  if(!drag) return;
+  const d=drag; drag=null;
+  if(d.moved){persistBoard();return}
+  if(d.kind==='own'){
+    const s=S.selected;
+    if(s!=null && s!==d.i){ // 2つ目の駒をタップ → 選手を入れ替え（位置はそのまま）
+      const P=S.board.pieces;[P[s].playerId,P[d.i].playerId]=[P[d.i].playerId,P[s].playerId];
+      S.selected=null;persistBoard();renderBoard();return;
+    }
+    S.selected=(s===d.i)?null:d.i;renderBoard();
+  }
+}
+svg.addEventListener('pointerup',endDrag);svg.addEventListener('pointercancel',endDrag);
+
+// ---------- ボード画面 ----------
+function renderBoard(){
+  const b=S.board;
+  document.querySelectorAll('#sizeSeg button').forEach(x=>x.classList.toggle('on',+x.dataset.size===b.size));
+  document.querySelectorAll('#dispSeg button').forEach(x=>x.classList.toggle('on',x.dataset.disp===S.settings.display));
+  document.querySelectorAll('#kitSeg button').forEach(x=>x.classList.toggle('on',x.dataset.kit===b.kit));
+  const tplSel=document.getElementById('tplSel');
+  tplSel.innerHTML=`<option value="">ひな形を選んで並べ直す…</option>`+Object.keys(TPL[b.size]).map(n=>`<option value="${n}">${n}${n===b.tpl?'（いまの並び）':''}</option>`).join('');
+  document.getElementById('oppChk').checked=b.showOpp;
+  document.getElementById('oppColor').value=b.oppColor;
+  document.getElementById('ballChk').checked=b.showBall;
+  // 読み込み元
+  const li=document.getElementById('loadedInfo');
+  if(b.src){
+    const src=b.src.type==='formation'?S.formations.find(f=>f.id===b.src.id):S.matches.find(m=>m.id===b.src.id);
+    if(src && !src.deletedAt) li.innerHTML=b.src.type==='formation'?`フォーメーション <b>${esc(src.name)}</b> を編集中`:`試合 <b>${esc(src.date)} vs ${esc(src.opponent||'—')}</b> を編集中`;
+    else {b.src=null;li.textContent='新しいボード（未保存）'}
+  } else li.textContent='新しいボード（未保存）';
+  drawField();drawPieces();renderBench();
+}
+function renderBench(){
+  const b=S.board, used=new Set(b.pieces.map(p=>p.playerId).filter(Boolean));
+  const bench=activePlayers().filter(p=>!used.has(p.id));
+  const sel=S.selected, info=document.getElementById('selInfo'), un=document.getElementById('unassignBtn');
+  if(sel!=null){
+    const p=b.pieces[sel], pl=p.playerId&&playerById(p.playerId);
+    info.textContent=`選択中: ${p.role}${pl?`（${pl.number??''} ${pl.name||''}）`:'（空き）'} → 控えの選手か、入れ替えるピッチ上の駒をタップ`;
+    un.hidden=!pl;
+  }else{info.textContent='控え（タップで空いている駒に入る）';un.hidden=true}
+  const kit=S.settings.kits[b.kit];
+  const box=document.getElementById('bench');
+  if(!S.players.filter(p=>!p.deletedAt).length){box.innerHTML='<div class="empty" style="width:100%">メンバー画面で選手を登録すると、ここに出ます。</div>';return}
+  box.innerHTML=bench.length?bench.map(p=>{
+    const k=p.pos==='GK'?S.settings.kits.gk:kit;
+    return `<span class="chip" data-id="${p.id}"><span class="num" style="background:${k.shirt};color:${k.text};border:1px solid var(--line)">${esc(p.number??'')}</span>${esc(p.name||'')}</span>`}).join('')
+    :'<div class="muted">全員ピッチに出ています</div>';
+}
+document.getElementById('bench').addEventListener('click',ev=>{
+  const c=ev.target.closest('.chip');if(!c)return;
+  const b=S.board;let i=S.selected;
+  if(i==null){
+    const pl=playerById(c.dataset.id);
+    i=b.pieces.findIndex(p=>!p.playerId && (pl&&pl.pos==='GK')===(p.role==='GK'));
+    if(i<0) i=b.pieces.findIndex(p=>!p.playerId);
+    if(i<0){toast('空いている駒がありません。駒をタップして選んでください');return}
+  }
+  b.pieces[i].playerId=c.dataset.id;S.selected=null;persistBoard();renderBoard();
+});
+document.getElementById('unassignBtn').onclick=()=>{if(S.selected==null)return;S.board.pieces[S.selected].playerId=null;S.selected=null;persistBoard();renderBoard()};
+document.getElementById('sizeSeg').onclick=ev=>{
+  const s=+ev.target.dataset.size;if(!s||s===S.board.size)return;
+  if(!confirm(`${s}人制に切り替えます。いまの並びは${s}人制のひな形に置き換わります（保存済みのデータは変わりません）。`))return;
+  const keep={kit:S.board.kit,showOpp:S.board.showOpp,oppColor:S.board.oppColor,showBall:S.board.showBall};
+  S.board=Object.assign(newBoard(s),keep);S.selected=null;persistBoard();renderBoard();
+};
+document.getElementById('tplSel').onchange=ev=>{
+  const n=ev.target.value;if(!n)return;
+  const b=S.board, t=TPL[b.size][n];
+  // 選手の割り当ては順番どおり引き継ぐ（GKはGKへ）
+  const assigned=b.pieces.map(p=>({gk:p.role==='GK',id:p.playerId}));
+  const gk=assigned.find(a=>a.gk), field=assigned.filter(a=>!a.gk);
+  let fi=0;
+  b.pieces=t.map(([role,x,y])=>({role,x,y,playerId:role==='GK'?(gk?gk.id:null):(field[fi++]||{}).id||null}));
+  b.tpl=n;b.opp=mirror(b.pieces);S.selected=null;persistBoard();renderBoard();
+};
+document.getElementById('dispSeg').onclick=ev=>{const d=ev.target.dataset.disp;if(!d)return;S.settings.display=d;saveSettings();renderBoard()};
+document.getElementById('kitSeg').onclick=ev=>{const k=ev.target.dataset.kit;if(!k)return;S.board.kit=k;persistBoard();renderBoard()};
+document.getElementById('oppChk').onchange=ev=>{S.board.showOpp=ev.target.checked;persistBoard();renderBoard()};
+document.getElementById('oppColor').oninput=ev=>{S.board.oppColor=ev.target.value;persistBoard();drawPieces()};
+document.getElementById('ballChk').onchange=ev=>{S.board.showBall=ev.target.checked;persistBoard();renderBoard()};
+document.getElementById('newBoardBtn').onclick=()=>{
+  if(!confirm('新しいボードにします。いまのボードで保存していない変更は消えます（保存済みのデータは変わりません）。'))return;
+  S.board=newBoard(S.board.size);S.selected=null;persistBoard();renderBoard();
+};
+function boardSnapshot(){const b=clone(S.board);delete b.src;return b}
+
+// 保存
+const dlgSave=document.getElementById('dlgSave');
+document.getElementById('saveBtn').onclick=()=>{
+  const ov=document.getElementById('svOverwrite');ov.hidden=!S.board.src;
+  if(S.board.src) ov.textContent=S.board.src.type==='formation'?'このフォーメーションに上書き保存':'この試合に上書き保存';
+  dlgSave.showModal();
+};
+document.getElementById('svCancel').onclick=()=>dlgSave.close();
+document.getElementById('svOverwrite').onclick=async()=>{
+  const src=S.board.src;dlgSave.close();if(!src)return;
+  const list=src.type==='formation'?S.formations:S.matches, store=src.type==='formation'?'formations':'matches';
+  const it=list.find(x=>x.id===src.id);if(!it)return;
+  it.board=boardSnapshot();it.updatedAt=now();await put(store,it);toast('上書き保存しました');renderAllLists();
+};
+document.getElementById('svForm').onclick=()=>{dlgSave.close();openFormDlg(null)};
+document.getElementById('svMatch').onclick=()=>{dlgSave.close();openMatchDlg(null)};
+
+// フォーメーションのダイアログ
+const dlgForm=document.getElementById('dlgForm');let editingForm=null;
+function openFormDlg(f){
+  editingForm=f;
+  document.getElementById('dlgFormTitle').textContent=f?'フォーメーションの名前・メモ':'フォーメーションとして保存';
+  document.getElementById('fmName').value=f?f.name:`${S.board.tpl||''}`;
+  document.getElementById('fmMemo').value=f?(f.memo||''):'';
+  dlgForm.showModal();
+}
+document.getElementById('fmCancel').onclick=()=>dlgForm.close();
+document.getElementById('fmOk').onclick=async()=>{
+  const name=document.getElementById('fmName').value.trim();if(!name){toast('名前を入れてください');return}
+  const memo=document.getElementById('fmMemo').value;
+  if(editingForm){Object.assign(editingForm,{name,memo,updatedAt:now()});await put('formations',editingForm)}
+  else{
+    const f={id:uid('f'),schema:SCHEMA,name,memo,board:boardSnapshot(),createdAt:now(),updatedAt:now()};
+    S.formations.push(f);await put('formations',f);S.board.src={type:'formation',id:f.id};persistBoard();
+  }
+  dlgForm.close();toast('保存しました');renderAllLists();renderBoard();
+};
+
+// 試合のダイアログ
+const dlgMatch=document.getElementById('dlgMatch');let editingMatch=null;
+function today(){const d=new Date();return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`}
+function openMatchDlg(m){
+  editingMatch=m;
+  document.getElementById('dlgMatchTitle').textContent=m?'試合の情報':'試合のフォーメーションとして保存';
+  document.getElementById('mtDate').value=m?m.date:today();
+  document.getElementById('mtOpp').value=m?(m.opponent||''):'';
+  document.getElementById('mtFor').value=m&&m.scoreFor!=null?m.scoreFor:'';
+  document.getElementById('mtAgainst').value=m&&m.scoreAgainst!=null?m.scoreAgainst:'';
+  document.getElementById('mtComp').value=m?(m.competition||''):'';
+  document.getElementById('mtMemo').value=m?(m.memo||''):'';
+  dlgMatch.showModal();
+}
+document.getElementById('mtCancel').onclick=()=>dlgMatch.close();
+document.getElementById('mtOk').onclick=async()=>{
+  const date=document.getElementById('mtDate').value;if(!date){toast('日付を入れてください');return}
+  const num=id=>{const v=document.getElementById(id).value;return v===''?null:Math.max(0,parseInt(v,10)||0)};
+  const data={date,opponent:document.getElementById('mtOpp').value.trim(),scoreFor:num('mtFor'),scoreAgainst:num('mtAgainst'),
+    competition:document.getElementById('mtComp').value.trim(),memo:document.getElementById('mtMemo').value,updatedAt:now()};
+  if(editingMatch){Object.assign(editingMatch,data);await put('matches',editingMatch)}
+  else{
+    const m=Object.assign({id:uid('m'),schema:SCHEMA,board:boardSnapshot(),createdAt:now()},data);
+    S.matches.push(m);await put('matches',m);S.board.src={type:'match',id:m.id};persistBoard();
+  }
+  dlgMatch.close();toast('保存しました');renderAllLists();renderBoard();
+};
+
+function openOnBoard(type,id){
+  const it=(type==='formation'?S.formations:S.matches).find(x=>x.id===id);if(!it)return;
+  const dirty=!S.board.src;
+  if(dirty && !confirm('ボードに読み込みます。いまのボードで保存していない変更は消えます（保存済みのデータは変わりません）。'))return;
+  S.board=Object.assign(newBoard(it.board.size||11),clone(it.board),{src:{type,id}});
+  S.selected=null;persistBoard();showPage('board');
+}
+
+// ---------- 一覧 ----------
+function miniBoard(b){
+  // 一覧用の小さな図
+  const kit=S.settings.kits[b.kit||'home'];
+  let s=`<svg viewBox="-2 -2 72 109" width="38" height="58" style="flex:none;border-radius:4px;background:var(--pitch)"><rect x="0" y="0" width="68" height="105" fill="none" stroke="rgba(255,255,255,.7)" stroke-width="1"/><line x1="0" y1="52.5" x2="68" y2="52.5" stroke="rgba(255,255,255,.7)" stroke-width="1"/>`;
+  for(const p of b.pieces){const k=p.role==='GK'?S.settings.kits.gk:kit;s+=`<circle cx="${p.x}" cy="${p.y}" r="3.6" fill="${p.playerId?k.shirt:'rgba(255,255,255,.5)'}" stroke="rgba(0,0,0,.4)" stroke-width=".6"/>`}
+  if(b.showOpp) for(const o of b.opp) s+=`<circle cx="${o.x}" cy="${o.y}" r="3.2" fill="${b.oppColor}"/>`;
+  return s+'</svg>';
+}
+function renderFormations(){
+  const list=S.formations.filter(f=>!f.deletedAt).sort((a,b)=>b.updatedAt.localeCompare(a.updatedAt));
+  document.getElementById('formList').innerHTML=list.length?list.map(f=>`
+    <div class="list-item">${miniBoard(f.board)}
+      <div class="main"><b>${esc(f.name)}</b><span class="muted">${f.board.size}人制・${esc(f.board.tpl||'')}${f.memo?'・'+esc(f.memo):''}</span></div>
+      <button class="sm pri" data-act="open" data-id="${f.id}">開く</button>
+      <button class="sm" data-act="edit" data-id="${f.id}">名前</button>
+      <button class="sm danger" data-act="del" data-id="${f.id}">削除</button>
+    </div>`).join(''):'<div class="empty">まだありません</div>';
+}
+document.getElementById('formList').onclick=async ev=>{
+  const b=ev.target.closest('button');if(!b)return;const f=S.formations.find(x=>x.id===b.dataset.id);if(!f)return;
+  if(b.dataset.act==='open') openOnBoard('formation',f.id);
+  if(b.dataset.act==='edit') openFormDlg(f);
+  if(b.dataset.act==='del'){if(!confirm(`「${f.name}」をゴミ箱へ移します（設定画面のゴミ箱から戻せます）。`))return;f.deletedAt=now();await put('formations',f);renderAllLists();renderBoard()}
+};
+function result(m){if(m.scoreFor==null||m.scoreAgainst==null)return['','未定'];return m.scoreFor>m.scoreAgainst?['res-w','勝']:m.scoreFor<m.scoreAgainst?['res-l','負']:['res-d','分']}
+function renderMatches(){
+  const list=S.matches.filter(m=>!m.deletedAt).sort((a,b)=>b.date.localeCompare(a.date)||b.createdAt.localeCompare(a.createdAt));
+  let w=0,d=0,l=0;list.forEach(m=>{const r=result(m)[1];if(r==='勝')w++;else if(r==='分')d++;else if(r==='負')l++});
+  document.getElementById('matchSummary').textContent=list.length?`${w}勝 ${d}分 ${l}敗`:'';
+  document.getElementById('matchList').innerHTML=list.length?list.map(m=>{const [c,r]=result(m);return `
+    <div class="list-item">${miniBoard(m.board)}
+      <div class="main"><span class="muted">${esc(m.date)}</span><b>vs ${esc(m.opponent||'—')}</b><span class="muted">${m.board.size}人制・${m.board.kit==='away'?'アウェイ':'ホーム'}キット${m.competition?'・'+esc(m.competition):''}</span></div>
+      <div class="score ${c}">${m.scoreFor==null?'−':m.scoreFor} - ${m.scoreAgainst==null?'−':m.scoreAgainst}<div style="font-size:11px">${r}</div></div>
+      <div style="display:flex;flex-direction:column;gap:4px">
+        <button class="sm pri" data-act="open" data-id="${m.id}">開く</button>
+        <button class="sm" data-act="edit" data-id="${m.id}">編集</button>
+        <button class="sm danger" data-act="del" data-id="${m.id}">削除</button>
+      </div>
+    </div>`}).join(''):'<div class="empty">まだありません</div>';
+}
+document.getElementById('matchList').onclick=async ev=>{
+  const b=ev.target.closest('button');if(!b)return;const m=S.matches.find(x=>x.id===b.dataset.id);if(!m)return;
+  if(b.dataset.act==='open') openOnBoard('match',m.id);
+  if(b.dataset.act==='edit') openMatchDlg(m);
+  if(b.dataset.act==='del'){if(!confirm(`${m.date} vs ${m.opponent||'—'} をゴミ箱へ移します（設定画面のゴミ箱から戻せます）。`))return;m.deletedAt=now();await put('matches',m);renderAllLists();renderBoard()}
+};
+
+// ---------- メンバー ----------
+function renderPlayers(){
+  const list=S.players.filter(p=>!p.deletedAt).sort((a,b)=>(a.number??999)-(b.number??999));
+  document.getElementById('playerEmpty').hidden=!!list.length;
+  document.getElementById('playerRows').innerHTML=list.map(p=>`<tr>
+    <td><b>${esc(p.number??'')}</b></td><td>${esc(p.name||'')}</td><td>${esc(p.pos||'')}</td>
+    <td><input type="checkbox" data-act="active" data-id="${p.id}" ${p.active!==false?'checked':''}></td>
+    <td><button class="sm" data-act="edit" data-id="${p.id}">編集</button></td></tr>`).join('');
+}
+const dlgPlayer=document.getElementById('dlgPlayer');let editingPlayer=null;
+function openPlayerDlg(p){
+  editingPlayer=p;
+  document.getElementById('plTitle').textContent=p?'メンバーを編集':'メンバーを追加';
+  document.getElementById('plNum').value=p&&p.number!=null?p.number:'';
+  document.getElementById('plName').value=p?(p.name||''):'';
+  document.getElementById('plPos').value=p?(p.pos||''):'';
+  let delBtn=document.getElementById('plDel');
+  if(!delBtn){delBtn=document.createElement('button');delBtn.id='plDel';delBtn.className='danger';delBtn.textContent='削除';delBtn.style.marginRight='auto';
+    dlgPlayer.querySelector('.btns').prepend(delBtn);
+    delBtn.onclick=async()=>{const q=editingPlayer;if(!q)return;if(!confirm(`${q.name||q.number} をゴミ箱へ移します（ボード上の駒からも外れて見えます。ゴミ箱から戻せます）。`))return;
+      q.deletedAt=now();await put('players',q);dlgPlayer.close();renderAll()}}
+  delBtn.hidden=!p;
+  dlgPlayer.showModal();
+}
+document.getElementById('addPlayerBtn').onclick=()=>openPlayerDlg(null);
+document.getElementById('plCancel').onclick=()=>dlgPlayer.close();
+document.getElementById('plOk').onclick=async()=>{
+  const nv=document.getElementById('plNum').value, name=document.getElementById('plName').value.trim();
+  if(nv===''&&!name){toast('背番号か名前を入れてください');return}
+  const number=nv===''?null:parseInt(nv,10);
+  const dup=S.players.find(p=>!p.deletedAt&&p.active!==false&&number!=null&&p.number===number&&p!==editingPlayer);
+  if(dup&&!confirm(`背番号 ${number} は ${dup.name} と重なっています。このまま保存しますか？`))return;
+  const data={number,name,pos:document.getElementById('plPos').value,updatedAt:now()};
+  if(editingPlayer){Object.assign(editingPlayer,data);await put('players',editingPlayer)}
+  else{const p=Object.assign({id:uid('p'),schema:SCHEMA,active:true,createdAt:now()},data);S.players.push(p);await put('players',p)}
+  dlgPlayer.close();renderAll();
+};
+document.getElementById('playerRows').onclick=async ev=>{
+  const t=ev.target;const p=S.players.find(x=>x.id===t.dataset.id);if(!p)return;
+  if(t.dataset.act==='edit') openPlayerDlg(p);
+  if(t.dataset.act==='active'){p.active=t.checked;p.updatedAt=now();await put('players',p);renderBoard()}
+};
+
+// ---------- 設定 ----------
+function renderSettings(){
+  document.getElementById('teamName').value=S.settings.teamName||'';
+  document.getElementById('teamNameH').textContent=S.settings.teamName||'';
+  document.getElementById('kitRows').innerHTML=['home','away','gk'].map(k=>{const c=S.settings.kits[k];return `
+    <div class="kitrow"><span>${KIT_LABEL[k]}</span>
+      <input type="color" data-kit="${k}" data-f="shirt" value="${c.shirt}">
+      <input type="color" data-kit="${k}" data-f="text" value="${c.text}">
+      <svg viewBox="-4 -4 8 8" width="40" height="40"><circle r="3.6" fill="${c.shirt}" stroke="rgba(0,0,0,.4)" stroke-width=".25"/><text text-anchor="middle" dominant-baseline="central" font-size="3.2" font-weight="bold" fill="${c.text}">10</text></svg>
+    </div>`}).join('')+`<button class="sm" id="kitReset">初期の色に戻す</button>`;
+  document.getElementById('verLbl').textContent=APP_VERSION;
+  renderTrash();renderLastBackup();
+}
+document.getElementById('teamName').onchange=ev=>{S.settings.teamName=ev.target.value.trim();saveSettings();renderSettings()};
+document.getElementById('kitRows').addEventListener('input',ev=>{
+  const t=ev.target;if(!t.dataset.kit)return;S.settings.kits[t.dataset.kit][t.dataset.f]=t.value;saveSettings();
+  const svgP=t.parentElement.querySelector('svg');svgP.querySelector('circle').setAttribute('fill',S.settings.kits[t.dataset.kit].shirt);svgP.querySelector('text').setAttribute('fill',S.settings.kits[t.dataset.kit].text);
+});
+document.getElementById('kitRows').addEventListener('click',ev=>{if(ev.target.id!=='kitReset')return;if(!confirm('ユニフォームの色を初期の色に戻しますか？'))return;S.settings.kits=clone(DEFAULT_KITS);saveSettings();renderSettings()});
+function renderTrash(){
+  const items=[...S.players.filter(x=>x.deletedAt).map(x=>({t:'players',l:'メンバー',n:`${x.number??''} ${x.name||''}`,x})),
+    ...S.formations.filter(x=>x.deletedAt).map(x=>({t:'formations',l:'フォーメーション',n:x.name,x})),
+    ...S.matches.filter(x=>x.deletedAt).map(x=>({t:'matches',l:'試合',n:`${x.date} vs ${x.opponent||'—'}`,x}))];
+  document.getElementById('trashList').innerHTML=items.length?items.map(i=>`<div class="list-item"><div class="main"><b>${esc(i.n)}</b><span class="muted">${i.l}・${i.x.deletedAt.slice(0,10)} 削除</span></div><button class="sm" data-t="${i.t}" data-id="${i.x.id}">戻す</button></div>`).join(''):'<div class="empty">空です</div>';
+}
+document.getElementById('trashList').onclick=async ev=>{
+  const b=ev.target.closest('button');if(!b)return;const it=S[b.dataset.t].find(x=>x.id===b.dataset.id);if(!it)return;
+  delete it.deletedAt;it.updatedAt=now();await put(b.dataset.t,it);toast('戻しました');renderAll();
+};
+
+// ---------- バックアップ ----------
+async function exportBackup(){
+  const data={app:'soccer-board',schema:SCHEMA,version:APP_VERSION,exportedAt:now(),
+    players:S.players,formations:S.formations,matches:S.matches,settings:S.settings,workBoard:S.board};
+  const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
+  const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`soccer-board_backup_${stamp}.json`;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  await setMeta('lastBackup',now());renderLastBackup();checkBackupNag();toast('書き出しました');
+}
+async function renderLastBackup(){const lb=await getMeta('lastBackup',null);document.getElementById('lastBackup').textContent=lb?`前回のバックアップ: ${lb.slice(0,16).replace('T',' ')}（UTC）`:'まだバックアップしていません'}
+document.getElementById('exportBtn').onclick=exportBackup;
+document.getElementById('bnBackup').onclick=exportBackup;
+document.getElementById('bbBackup').onclick=exportBackup;
+document.getElementById('bbLater').onclick=async()=>{await setMeta('nagSnooze',now());document.getElementById('backupBanner').hidden=true};
+document.getElementById('importBtn').onclick=()=>document.getElementById('importFile').click();
+let pendingImport=null;
+document.getElementById('importFile').onchange=async ev=>{
+  const f=ev.target.files[0];ev.target.value='';if(!f)return;
+  try{
+    const d=JSON.parse(await f.text());
+    if(d.app!=='soccer-board') throw new Error('このアプリのバックアップではありません');
+    pendingImport=d;
+    document.getElementById('impSummary').textContent=`${(d.exportedAt||'').slice(0,10)} の書き出し: メンバー ${d.players?.length||0}人 / フォーメーション ${d.formations?.length||0}件 / 試合 ${d.matches?.length||0}件`;
+    document.getElementById('dlgImport').showModal();
+  }catch(e){alert('読み込めませんでした: '+e.message)}
+};
+document.getElementById('impCancel').onclick=()=>{pendingImport=null;document.getElementById('dlgImport').close()};
+async function doImport(mode){
+  const d=pendingImport;if(!d)return;document.getElementById('dlgImport').close();
+  const pmap={};
+  const players=(d.players||[]).map(p=>{const q=clone(p);if(mode==='add'){q.id=uid('p');pmap[p.id]=q.id}return q});
+  const fixBoard=b=>{if(mode==='add'&&b&&b.pieces)b.pieces.forEach(p=>{if(p.playerId&&pmap[p.playerId])p.playerId=pmap[p.playerId]});return b};
+  const forms=(d.formations||[]).map(f=>{const q=clone(f);if(mode==='add')q.id=uid('f');fixBoard(q.board);return q});
+  const matches=(d.matches||[]).map(m=>{const q=clone(m);if(mode==='add')q.id=uid('m');fixBoard(q.board);return q});
+  for(const p of players)await put('players',p);
+  for(const f of forms)await put('formations',f);
+  for(const m of matches)await put('matches',m);
+  if(mode==='over'&&d.settings){S.settings=Object.assign(defaultSettings(),d.settings);await saveSettings()}
+  pendingImport=null;
+  await loadAll();renderAll();toast(`読み込みました（メンバー${players.length}・フォーメーション${forms.length}・試合${matches.length}）`);
+}
+document.getElementById('impAdd').onclick=()=>doImport('add');
+document.getElementById('impOver').onclick=()=>{if(confirm('同じIDのデータを、バックアップの内容で置き換えます。よろしいですか？（バックアップに無いデータは残ります）'))doImport('over')};
+
+async function checkBackupNag(){
+  const hasData=S.players.length+S.formations.length+S.matches.length>0;
+  const lb=await getMeta('lastBackup',null), sn=await getMeta('nagSnooze',null);
+  const days=t=>t?(Date.now()-Date.parse(t))/864e5:Infinity;
+  const show=hasData && days(lb)>=30 && days(sn)>=3;
+  document.getElementById('backupBanner').hidden=!show;
+  if(show) document.getElementById('backupMsg').textContent=lb?`前回のバックアップから${Math.floor(days(lb))}日たっています。`:'まだ一度もバックアップしていません。データはこの端末の中だけにあります。';
+}
+
+// ---------- 画面切替 ----------
+function showPage(p){
+  S.page=p;
+  document.querySelectorAll('nav button').forEach(b=>b.classList.toggle('on',b.dataset.page===p));
+  document.querySelectorAll('section.page').forEach(s=>s.classList.toggle('on',s.id==='p-'+p));
+  if(p==='board')renderBoard();
+  window.scrollTo(0,0);
+}
+document.querySelector('nav').onclick=ev=>{const p=ev.target.dataset.page;if(p)showPage(p)};
+function renderAllLists(){renderFormations();renderMatches()}
+function renderAll(){renderBoard();renderAllLists();renderPlayers();renderSettings()}
+
+// ---------- 更新（同意してから当てる） ----------
+let waitingSW=null;
+function showUpdate(sw){waitingSW=sw;document.getElementById('updateBanner').hidden=false}
+let userAskedUpdate=false;
+document.getElementById('bnUpdate').onclick=()=>{if(waitingSW){userAskedUpdate=true;waitingSW.postMessage('SKIP_WAITING')}};
+async function setupSW(){
+  if(!('serviceWorker' in navigator)||location.protocol==='file:')return;
+  const reg=await navigator.serviceWorker.register('sw.js');
+  if(reg.waiting&&navigator.serviceWorker.controller)showUpdate(reg.waiting);
+  reg.addEventListener('updatefound',()=>{const nw=reg.installing;nw.addEventListener('statechange',()=>{if(nw.state==='installed'&&navigator.serviceWorker.controller)showUpdate(nw)})});
+  let reloaded=false;
+  // 初回インストール時（clients.claim）は再読み込みしない。「更新する」を押したときだけ切り替える
+  navigator.serviceWorker.addEventListener('controllerchange',()=>{if(reloaded||!userAskedUpdate)return;reloaded=true;location.reload()});
+  document.getElementById('checkUpdBtn').onclick=async()=>{await reg.update();setTimeout(()=>{if(!reg.waiting&&!reg.installing)toast('最新です')},1500)};
+}
+
+(async()=>{
+  db=await openDB();
+  await loadAll();
+  renderAll();
+  checkBackupNag();
+  setupSW().catch(()=>{});
+})();
+</script>
+</body>
+</html>
