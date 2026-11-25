@@ -167,11 +167,12 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <!-- フォーメーション -->
 <section class="page" id="p-formations">
+  <button id="recvFormBtn" style="width:100%;margin-bottom:10px;padding:10px">📥 受け取ったフォーメーションを読み込む</button>
   <div class="card">
     <div class="title-line">保存したフォーメーション</div>
     <div id="formList"></div>
   </div>
-  <p class="muted">ボード画面で「保存…」→「フォーメーションとして保存」で追加できます。</p>
+  <p class="muted">ボード画面で「保存…」→「フォーメーションとして保存」で追加できます。「送る」で1つだけをほかの人に渡せます（受け取った人は上の「受け取ったフォーメーションを読み込む」から）。</p>
 </section>
 
 <!-- 試合 -->
@@ -342,6 +343,28 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
   <div class="btns"><button id="scCancel">キャンセル</button><button class="pri" id="scOk">作る</button></div>
 </dialog>
 
+<dialog id="dlgShare">
+  <h3>フォーメーションを送る</h3>
+  <p class="muted" style="margin-top:0" id="shName"></p>
+  <label class="chk" style="margin-bottom:8px"><input type="checkbox" id="shWithPlayers" checked> 選手（背番号・名前）も入れる</label>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <button class="pri" id="shFile">📄 ファイルで送る</button>
+    <button id="shCode">📋 コードをコピー（LINE などに貼り付け）</button>
+  </div>
+  <p class="muted">受け取った人は、戦術ボードの「フォーメーション」→「受け取ったフォーメーションを読み込む」で取り込みます。リンクではなく、アプリの中で読み込んでください。</p>
+  <div class="btns"><button id="shClose">閉じる</button></div>
+</dialog>
+
+<dialog id="dlgRecv">
+  <h3>受け取ったフォーメーションを読み込む</h3>
+  <div style="display:flex;flex-direction:column;gap:8px">
+    <button class="pri" id="rvFileBtn">📄 ファイルを選ぶ</button>
+    <input type="file" id="rvFile" accept=".json,application/json" hidden>
+  </div>
+  <label class="f" style="display:block;margin-top:10px"><span class="muted" style="display:block;margin-bottom:2px">または、コードを貼り付け</span><textarea id="rvCode" rows="3" style="width:100%;box-sizing:border-box" placeholder="SBF1: から始まる文字"></textarea></label>
+  <div class="btns"><button id="rvCancel">キャンセル</button><button class="pri" id="rvCodeOk">コードを読み込む</button></div>
+</dialog>
+
 <dialog id="dlgClockFix">
   <h3 id="cfTitle">キックオフの時間を合わせる</h3>
   <label class="chk" style="margin-bottom:6px"><input type="radio" name="cfMode" value="elapsed" checked> いまの経過時間で合わせる</label>
@@ -404,7 +427,7 @@ dialog .btns{display:flex;justify-content:flex-end;gap:8px;margin-top:12px}
 
 <script>
 'use strict';
-const APP_VERSION='0.9.1';
+const APP_VERSION='0.9.2';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -1122,6 +1145,70 @@ function openOnBoard(type,id){
   S.selected=null;S.selOpp=null;S.viewAt=null;persistBoard();showPage('board');
 }
 
+// ---------- フォーメーションを送る・受け取る ----------
+// 送るもの: {app:'soccer-board',kind:'formation',v:1,name,memo,board,players:[{i,number,name,pos}]}
+//   board の playerId は送らない（相手の端末では ID が違うため）。選手は駒の番号 i と背番号・名前で送る
+// 受け取り: 新しいフォーメーションとして追加（今あるものは変えない）。背番号と名前が同じ選手がいれば、その駒に入れる
+const dlgShare=document.getElementById('dlgShare');let shForm=null;
+function formPacket(f,withPlayers){
+  const b=clone(f.board);const players=[];
+  b.pieces.forEach((p,i)=>{const pl=p.playerId&&playerById(p.playerId);if(withPlayers&&pl)players.push({i,number:pl.number??null,name:pl.name||'',pos:pl.pos||''});p.playerId=null});
+  delete b.src;b.oppTeamId=null;
+  return {app:'soccer-board',kind:'formation',v:1,exportedAt:now(),name:f.name,memo:f.memo||'',board:b,players};
+}
+const b64e=str=>btoa(String.fromCharCode(...new TextEncoder().encode(str)));
+const b64d=str=>new TextDecoder().decode(Uint8Array.from(atob(str),c=>c.charCodeAt(0)));
+function safeName(n){return String(n).replace(/[\\/:*?"<>|\s]+/g,'_').slice(0,40)||'formation'}
+function openShareDlg(f){shForm=f;document.getElementById('shName').textContent=`「${f.name}」（${f.board.size}人制・${f.board.tpl||''}）`;dlgShare.showModal()}
+document.getElementById('shClose').onclick=()=>dlgShare.close();
+document.getElementById('shFile').onclick=async()=>{
+  const pk=formPacket(shForm,document.getElementById('shWithPlayers').checked);
+  const fname=`formation_${safeName(shForm.name)}.json`, text=JSON.stringify(pk);
+  // スマホは共有シート（LINE・メールなど）、できなければファイルとして保存
+  try{
+    const file=new File([text],fname,{type:'application/json'});
+    if(navigator.canShare&&navigator.canShare({files:[file]})){await navigator.share({files:[file],title:shForm.name});dlgShare.close();return}
+  }catch(e){if(e&&e.name==='AbortError')return}
+  const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([text],{type:'application/json'}));a.download=fname;
+  document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
+  toast('ファイルを保存しました。LINE やメールで送ってください');dlgShare.close();
+};
+document.getElementById('shCode').onclick=async()=>{
+  const code='SBF1:'+b64e(JSON.stringify(formPacket(shForm,document.getElementById('shWithPlayers').checked)));
+  try{await navigator.clipboard.writeText(code);toast('コードをコピーしました。LINE などに貼り付けて送ってください');dlgShare.close()}
+  catch(e){prompt('コピーできませんでした。下の文字を長押しでコピーしてください',code)}
+};
+const dlgRecv=document.getElementById('dlgRecv');
+document.getElementById('recvFormBtn').onclick=()=>{document.getElementById('rvCode').value='';dlgRecv.showModal()};
+document.getElementById('rvCancel').onclick=()=>dlgRecv.close();
+document.getElementById('rvFileBtn').onclick=()=>document.getElementById('rvFile').click();
+document.getElementById('rvFile').onchange=async ev=>{const f=ev.target.files[0];ev.target.value='';if(!f)return;importFormText(await f.text())};
+document.getElementById('rvCodeOk').onclick=()=>{
+  const t=document.getElementById('rvCode').value.trim();if(!t){toast('コードを貼り付けてください');return}
+  const m=t.match(/SBF1:([A-Za-z0-9+/=]+)/);if(!m){alert('コードが読み取れません。「SBF1:」から最後まで、すべて貼り付けてください');return}
+  let text;try{text=b64d(m[1]);JSON.parse(text)}catch(e){alert('コードが途中で切れているようです。もう一度、すべてコピーして貼り付けてください');return}
+  importFormText(text);
+};
+async function importFormText(text){
+  let d;try{d=JSON.parse(text)}catch(e){alert('読み込めませんでした（フォーメーションのファイル・コードではありません）');return}
+  if(d.app!=='soccer-board'){alert('戦術ボードのフォーメーションではありません');return}
+  if(d.kind!=='formation'){alert(d.players&&d.matches?'これはバックアップのファイルです。設定画面の「バックアップ」→「読み込む」から読み込んでください。':'フォーメーションのファイルではありません');return}
+  const b=Object.assign(newBoard(d.board&&d.board.size||11),clone(d.board||{}));delete b.src;b.oppTeamId=null;if(!b.arrows)b.arrows=[];
+  b.pieces.forEach(p=>p.playerId=null);
+  // 背番号と名前が同じ選手（登録・削除されていない）がいれば、その駒に入れる
+  let hit=0;const miss=[];
+  for(const x of d.players||[]){
+    const pl=S.players.find(p=>!p.deletedAt&&String(p.number??'')===String(x.number??'')&&(p.name||'')===(x.name||''));
+    if(pl&&b.pieces[x.i]&&!b.pieces.some(q=>q.playerId===pl.id)){b.pieces[x.i].playerId=pl.id;hit++}else miss.push(`${x.number??''} ${x.name||''}`.trim());
+  }
+  let name=d.name||'受け取ったフォーメーション';
+  const used=n=>S.formations.some(f=>!f.deletedAt&&f.name===n);
+  if(used(name)){const base=name;name=base+'（受け取り）';for(let k=2;used(name);k++)name=`${base}（受け取り${k}）`}
+  const f={id:uid('f'),schema:SCHEMA,name,memo:d.memo||'',board:b,createdAt:now(),updatedAt:now()};
+  S.formations.push(f);await put('formations',f);dlgRecv.close();renderFormations();
+  alert(`「${name}」を追加しました。`+(d.players&&d.players.length?`\n選手: ${hit}人を入れました`+(miss.length?`。背番号と名前が同じ選手がいない ${miss.length}人（${miss.slice(0,6).join('、')}${miss.length>6?' ほか':''}）は空いた駒にしています。`:'。'):'\n（選手は入っていません。駒は空いた状態です）'));
+}
+
 // ---------- 一覧 ----------
 function miniBoard(b){
   // 一覧用の小さな図
@@ -1136,15 +1223,19 @@ function renderFormations(){
   document.getElementById('formList').innerHTML=list.length?list.map(f=>`
     <div class="list-item">${miniBoard(f.board)}
       <div class="main"><b>${esc(f.name)}</b><span class="muted">${f.board.size}人制・${esc(f.board.tpl||'')}${f.memo?'・'+esc(f.memo):''}</span></div>
-      <button class="sm pri" data-act="open" data-id="${f.id}">開く</button>
-      <button class="sm" data-act="edit" data-id="${f.id}">名前</button>
-      <button class="sm danger" data-act="del" data-id="${f.id}">削除</button>
+      <div style="display:grid;grid-template-columns:auto auto;gap:4px">
+        <button class="sm pri" data-act="open" data-id="${f.id}">開く</button>
+        <button class="sm" data-act="share" data-id="${f.id}">送る</button>
+        <button class="sm" data-act="edit" data-id="${f.id}">名前</button>
+        <button class="sm danger" data-act="del" data-id="${f.id}">削除</button>
+      </div>
     </div>`).join(''):'<div class="empty">まだありません</div>';
 }
 document.getElementById('formList').onclick=async ev=>{
   const b=ev.target.closest('button');if(!b)return;const f=S.formations.find(x=>x.id===b.dataset.id);if(!f)return;
   if(b.dataset.act==='open') openOnBoard('formation',f.id);
   if(b.dataset.act==='edit') openFormDlg(f);
+  if(b.dataset.act==='share') openShareDlg(f);
   if(b.dataset.act==='del'){if(!confirm(`「${f.name}」をゴミ箱へ移します（設定画面のゴミ箱から戻せます）。`))return;f.deletedAt=now();await put('formations',f);renderAllLists();renderBoard()}
 };
 function result(m){if(m.scoreFor==null||m.scoreAgainst==null)return['','未入力'];return m.scoreFor>m.scoreAgainst?['res-w','勝']:m.scoreFor<m.scoreAgainst?['res-l','負']:['res-d','分']}
