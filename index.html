@@ -28,6 +28,14 @@ header{position:sticky;top:0;z-index:20;background:var(--accent);color:var(--acc
   padding:calc(env(safe-area-inset-top) + 8px) 12px 0}
 header h1{margin:0 0 6px;font-size:17px;display:flex;align-items:center;gap:8px}
 header h1 small{font-weight:normal;opacity:.8;font-size:12px}
+.team-btn{background:rgba(255,255,255,.2);border:0;color:inherit;font-size:12px;font-weight:normal;padding:3px 10px;border-radius:999px;max-width:55vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.kit-ed{border-top:1px solid var(--line);padding:10px 0}
+.kit-ed:first-child{border-top:0;padding-top:0}
+.kit-lbl{font-size:12px;color:var(--sub);margin:8px 0 4px}
+.sw{display:flex;flex-wrap:wrap;gap:7px;align-items:center}
+.swb{width:30px;height:30px;border-radius:50%;padding:0;border:1px solid rgba(0,0,0,.35)}
+.swb.on{outline:3px solid var(--accent);outline-offset:2px}
+.sw input[type=color]{width:36px;height:30px;padding:0 2px;border:1px solid var(--line);border-radius:6px;background:none}
 nav{display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
 nav::-webkit-scrollbar{display:none}
 nav button{flex:1 0 auto;background:transparent;border:0;color:var(--accent-ink);opacity:.75;
@@ -82,8 +90,6 @@ th,td{padding:6px 4px;border-bottom:1px solid var(--line);text-align:left;font-s
 th{color:var(--sub);font-weight:normal;font-size:12px;white-space:nowrap}
 td button{white-space:nowrap}
 #playerRows td{white-space:nowrap} #playerRows td.nm{white-space:normal;word-break:break-all}
-.kitrow{display:grid;grid-template-columns:5.5em 1fr 1fr 44px;gap:8px;align-items:center;margin-bottom:8px}
-.kitrow input[type=color]{width:100%;height:34px;border:1px solid var(--line);border-radius:6px;background:none;padding:2px}
 .banner{position:sticky;top:0;z-index:30;background:#fef3c7;color:#713f12;border-bottom:1px solid #f59e0b;padding:10px 12px;font-size:14px}
 .banner .row{margin-top:6px}
 dialog{border:1px solid var(--line);border-radius:12px;background:var(--card);color:var(--ink);padding:16px;width:min(92vw,420px)}
@@ -124,7 +130,7 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
   <div class="row"><button class="sm pri" id="bbBackup">今すぐバックアップ</button><button class="sm" id="bbLater">あとで</button></div>
 </div>
 <header>
-  <h1>⚽ 戦術ボード <small id="teamNameH"></small></h1>
+  <h1>⚽ 戦術ボード <button class="team-btn" id="teamBtn"><span id="teamNameH"></span> ▾</button></h1>
   <nav>
     <button data-page="board" class="on">ボード</button>
     <button data-page="formations">フォーメーション</button>
@@ -305,10 +311,10 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
   <div class="card">
     <div class="title-line">チーム</div>
     <div class="row"><input type="text" id="teamName" class="grow" placeholder="チーム名"></div>
+    <div class="row"><button class="sm" id="teamBtn2">チームを切り替える・追加する</button></div>
   </div>
   <div class="card">
-    <div class="title-line">ユニフォームの色</div>
-    <div class="kitrow muted"><span></span><span>シャツ</span><span>文字</span><span></span></div>
+    <div class="title-line">ユニフォーム</div>
     <div id="kitRows"></div>
   </div>
   <div class="card">
@@ -453,6 +459,14 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
   <div class="btns"><button id="scAuto" style="margin-right:auto">記録から数える</button><button id="scCancel">キャンセル</button><button class="pri" id="scOk">保存</button></div>
 </dialog>
 
+<dialog id="dlgTeams">
+  <h3>チーム</h3>
+  <p class="muted" style="margin-top:0">チームごとに、メンバー・フォーメーション・試合・局面・相手チーム・ユニフォームを別に保存します。バックアップもチームごとです。</p>
+  <div id="tmList"></div>
+  <div class="row" style="margin-top:10px"><input type="text" id="tmNew" class="grow" placeholder="新しいチームの名前（例: U-10）"><button id="tmAdd">＋ 追加</button></div>
+  <div class="btns"><button id="tmClose">閉じる</button></div>
+</dialog>
+
 <dialog id="dlgClockFix">
   <h3 id="cfTitle">キックオフの時間を合わせる</h3>
   <label class="chk" style="margin-bottom:6px"><input type="radio" name="cfMode" value="elapsed" checked> いまの経過時間で合わせる</label>
@@ -515,7 +529,7 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
 
 <script>
 'use strict';
-const APP_VERSION='0.10.1';
+const APP_VERSION='1.00.0';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -542,11 +556,11 @@ const KIT_LABEL={home:'ホーム',away:'アウェイ',gk:'GK'};
 
 // ---------- IndexedDB ----------
 let db;
-function openDB(){
+function openDB(name='soccer-board'){
   return new Promise((res,rej)=>{
     // version 2（v0.4.0）: 相手チームの store を追加するだけ。既存の store・データには触れない
     // version 3（v0.9.0）: 局面の解説の store（scenes）を追加するだけ
-    const rq=indexedDB.open('soccer-board',3);
+    const rq=indexedDB.open(name,3);
     rq.onupgradeneeded=()=>{
       const d=rq.result;
       for(const s of ['players','formations','matches','opponents','scenes']) if(!d.objectStoreNames.contains(s)) d.createObjectStore(s,{keyPath:'id'});
@@ -583,6 +597,41 @@ function applyOppTeam(b){
 }
 function mirror(pieces){return pieces.map((p,i)=>({n:i+1,x:+(W-p.x).toFixed(1),y:+(H-p.y).toFixed(1)}))}
 
+// ---------- チーム ----------
+// 1つ目のチームは今までどおり IndexedDB 'soccer-board'（データはそのまま）。2つ目からは 'soccer-board-<id>' に別に保存する
+// チームの一覧と、いま使っているチームは 'soccer-board' の meta（teams / curTeam）に置く
+let mainDb=null, TEAMS=[], CUR_TEAM='main';
+function metaGetOn(d,k,def){return new Promise(res=>{const r=d.transaction('meta').objectStore('meta').get(k);r.onsuccess=()=>res(r.result?r.result.v:def);r.onerror=()=>res(def)})}
+function metaSetOn(d,k,v){return new Promise((res,rej)=>{const r=d.transaction('meta','readwrite').objectStore('meta').put({k,v});r.onsuccess=()=>res();r.onerror=()=>rej(r.error)})}
+const curTeam=()=>TEAMS.find(t=>t.id===CUR_TEAM)||TEAMS[0];
+function saveTeams(){return metaSetOn(mainDb,'teams',TEAMS)}
+async function openTeamDb(){
+  mainDb=await openDB('soccer-board');
+  TEAMS=await metaGetOn(mainDb,'teams',null)||[{id:'main',db:'soccer-board',name:''}];
+  CUR_TEAM=await metaGetOn(mainDb,'curTeam','main');
+  const t=curTeam();CUR_TEAM=t.id;
+  return t.db==='soccer-board'?mainDb:await openDB(t.db);
+}
+const dlgTeams=document.getElementById('dlgTeams');
+function openTeamsDlg(){
+  document.getElementById('tmList').innerHTML=TEAMS.map((t,i)=>{const cur=t.id===CUR_TEAM, nm=(cur?S.settings.teamName:t.name)||`チーム${i+1}（名前なし）`;
+    return `<div class="list-item"><div class="main"><b>${esc(nm)}</b>${cur?'<span class="muted">使っているチーム</span>':''}</div>${cur?'':`<button class="sm pri" data-team="${t.id}">切り替える</button>`}</div>`}).join('');
+  document.getElementById('tmNew').value='';dlgTeams.showModal();
+}
+async function switchTeam(id){
+  // 保存待ちの変更を書き終えてから読み直す
+  clearTimeout(saveBoardTimer);await setMeta('workBoard',S.board);
+  await metaSetOn(mainDb,'curTeam',id);toast('チームを切り替えます…');setTimeout(()=>location.reload(),500);
+}
+document.getElementById('teamBtn').onclick=document.getElementById('teamBtn2').onclick=openTeamsDlg;
+document.getElementById('tmClose').onclick=()=>dlgTeams.close();
+document.getElementById('tmList').onclick=ev=>{const b=ev.target.closest('[data-team]');if(b)switchTeam(b.dataset.team)};
+document.getElementById('tmAdd').onclick=async()=>{
+  const name=document.getElementById('tmNew').value.trim();if(!name){toast('チームの名前を入れてください');return}
+  const id=uid('t');TEAMS.push({id,db:'soccer-board-'+id,name,createdAt:now()});await saveTeams();
+  if(confirm(`「${name}」を追加しました。いま「${name}」に切り替えますか？（今のチームのデータはそのまま残ります）`))switchTeam(id);else openTeamsDlg();
+};
+
 async function loadAll(){
   [S.players,S.formations,S.matches,S.opponents,S.scenes]=await Promise.all([all('players'),all('formations'),all('matches'),all('opponents'),all('scenes')]);
   const savedSettings=await getMeta('settings',{});
@@ -592,6 +641,12 @@ async function loadAll(){
   if(!Array.isArray(savedSettings.grades)){
     S.settings.grades=[...new Set(S.players.filter(p=>p.grade).map(p=>p.grade))];
     await setMeta('settings',S.settings);
+  }
+  // チームの名前: 新しいチームは追加したときの名前を入れる。一覧の名前は設定のチーム名に合わせる
+  const ct=curTeam();
+  if(ct){
+    if(!S.settings.teamName&&ct.name){S.settings.teamName=ct.name;await setMeta('settings',S.settings)}
+    if(S.settings.teamName&&ct.name!==S.settings.teamName){ct.name=S.settings.teamName;await saveTeams()}
   }
   S.board=await getMeta('workBoard',null)||newBoard(11);
   if(!S.board.arrows) S.board.arrows=[];
@@ -718,10 +773,11 @@ function drawPieces(){
       const label=fitText(nameTxt||String(numTxt),6);
       const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.75,fill:k.text},g);t.textContent=label;
       const tw=textW(t,label.length*2.75), w=Math.max(R*2,tw+2), h=R*1.8;
-      g.insertBefore(el('rect',{x:-w/2,y:-h/2,width:w,height:h,rx:h/2,fill:k.shirt,stroke:'rgba(0,0,0,.45)','stroke-width':.3}),t);
+      Object.entries(kitTextAttrs(k)).forEach(([a,v])=>t.setAttribute(a,v));
+      g.insertBefore(el('rect',{x:-w/2,y:-h/2,width:w,height:h,rx:h/2,fill:kitPaint(g,k),stroke:'rgba(0,0,0,.45)','stroke-width':.3}),t);
     }else{
-      el('circle',{r:R,fill:pl?k.shirt:'rgba(255,255,255,.18)',stroke:pl?'rgba(0,0,0,.45)':'#fff','stroke-width':.3,'stroke-dasharray':pl?'':'1 .7'},g);
-      const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:2,fill:pl?k.text:'#fff'},g);
+      el('circle',{r:R,fill:pl?kitPaint(g,k):'rgba(255,255,255,.18)',stroke:pl?'rgba(0,0,0,.45)':'#fff','stroke-width':.3,'stroke-dasharray':pl?'':'1 .7'},g);
+      const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:2,fill:pl?k.text:'#fff'},pl?kitTextAttrs(k):{}),g);
       t.textContent=pl?numTxt:p.role;
       if(disp==='both' && pl && nameTxt){
         const lbl=fitText(nameTxt,7), fs=2.55, bh=3.4;
@@ -739,6 +795,29 @@ function drawPieces(){
     const g=el('g',{class:'piece','data-kind':'ball',transform:`translate(${b.ball.x},${b.ball.y})`},svg);
     drawBall(g);
   }
+}
+// 柄のある駒の塗り。SVG の pattern をその図の defs に作って url(#…) を返す（無地は色をそのまま）
+function kitPaint(node,k){
+  const pt=k.pattern||'solid';if(pt==='solid'||!k.shirt2)return k.shirt;
+  const root=node.ownerSVGElement||node;let defs=root.querySelector('defs');
+  if(!defs){defs=document.createElementNS(NS,'defs');root.insertBefore(defs,root.firstChild)}
+  const id=`kp_${root.id||'r'}_${pt}_${k.shirt}_${k.shirt2}`.replace(/[^\w-]/g,'');
+  if(!root.querySelector('#'+id)){
+    const P=el('pattern',{id,patternUnits:'objectBoundingBox',patternContentUnits:'objectBoundingBox',width:1,height:1},defs);
+    el('rect',{width:1,height:1,fill:k.shirt},P);
+    if(pt==='stripe')for(let i=0;i<2;i++)el('rect',{x:i*.5+.25,y:0,width:.25,height:1,fill:k.shirt2},P);
+    if(pt==='border')for(let i=0;i<2;i++)el('rect',{x:0,y:i*.5+.25,width:1,height:.25,fill:k.shirt2},P);
+    if(pt==='half')el('rect',{x:.5,y:0,width:.5,height:1,fill:k.shirt2},P);
+  }
+  return `url(#${id})`;
+}
+// 柄の上でも番号が読めるように縁取りする（無地はそのまま）
+function kitTextAttrs(k){if(!k.pattern||k.pattern==='solid'||!k.shirt2)return {};return {stroke:contrast(k.text)==='#111'?'rgba(0,0,0,.65)':'rgba(255,255,255,.8)','stroke-width':.45,'paint-order':'stroke'}}
+// 控えの丸（HTML）用
+function kitCss(k){
+  const a=k.shirt,b=k.shirt2||k.shirt,pt=k.pattern||'solid';
+  const bg=pt==='stripe'?`repeating-linear-gradient(90deg,${a} 0 6px,${b} 6px 12px)`:pt==='border'?`repeating-linear-gradient(0deg,${a} 0 6px,${b} 6px 12px)`:pt==='half'?`linear-gradient(90deg,${a} 50%,${b} 50%)`:a;
+  return `background:${bg};color:${k.text};${pt!=='solid'?'text-shadow:0 0 2px '+(contrast(k.text)==='#111'?'#000':'#fff')+';':''}`;
 }
 function contrast(hex){const h=hex.replace('#','');const r=parseInt(h.substr(0,2),16),g=parseInt(h.substr(2,2),16),b=parseInt(h.substr(4,2),16);return (r*299+g*587+b*114)/1000>150?'#111':'#fff'}
 
@@ -1051,7 +1130,7 @@ function renderBench(){
   if(!S.players.filter(p=>!p.deletedAt).length){box.innerHTML='<div class="empty" style="width:100%">メンバー画面で選手を登録すると、ここに出ます。</div>';return}
   const chip=p=>{
     const k=p.pos==='GK'?S.settings.kits.gk:kit;
-    return `<span class="chip" data-id="${p.id}"><span class="num" style="background:${k.shirt};color:${k.text};border:1px solid var(--line)">${esc(p.number??'')}</span>${esc(p.name||'')}</span>`};
+    return `<span class="chip" data-id="${p.id}"><span class="num" style="${kitCss(k)}border:1px solid var(--line)">${esc(p.number??'')}</span>${esc(p.name||'')}</span>`};
   // ポジション別（GK→DF→MF→FW→未設定）。各グループの中は背番号順
   const groups=[['GK','GK'],['DF','DF'],['MF','MF'],['FW','FW'],['','位置なし']]
     .map(([pos,label])=>[label,bench.filter(p=>pos?p.pos===pos:!['GK','DF','MF','FW'].includes(p.pos))]).filter(([,ps])=>ps.length);
@@ -1525,21 +1604,50 @@ function lineupAt(m,upto){
   return {pos,ids,start,tpl};
 }
 function lineupTop(pos){return Math.max(-3,Math.floor(Math.min(H/2-12,...pos.map(p=>p.y-R-2))))}
-function drawLineup(svgEl,m,L,top){
+// 選手ごとの得点・アシスト・カード（upto: null=すべて／'start'=なし／イベントID=そこまで）
+function playerMarks(m,upto){
+  const map={};if(upto==='start')return map;
+  const get=id=>map[id]||(map[id]={g:0,a:0,y:0,r:0});
+  for(const e of sortedEvents(m)){
+    if(e.side!=='opp'){
+      if(isGoalEv(e)&&e.player)get(e.player).g++;
+      if(e.type==='goal'&&e.assist)get(e.assist).a++;
+      if(e.type==='card'&&e.player)get(e.player)[e.color==='R'?'r':'y']++;
+    }
+    if(e.id===upto)break;
+  }
+  return map;
+}
+// 駒の小さい印: 左上＝カード、右下＝ボール（得点）、左下＝スパイク（アシスト）。右上は途中から入った印
+function drawPlayerMarks(g,root,mk){
+  if(!mk)return;
+  const cards=[...Array(Math.min(mk.y,2)).fill('#facc15'),...Array(Math.min(mk.r,1)).fill('#dc2626')];
+  cards.forEach((c,k)=>el('rect',{x:-R*1.2+k*.95,y:-R*1.15,width:1.7,height:2.4,rx:.22,fill:c,stroke:'rgba(0,0,0,.6)','stroke-width':.2,transform:`rotate(-12 ${-R*.9+k*.95} ${-R*.6})`},g));
+  for(let k=0;k<Math.min(mk.g,3);k++){const b=el('g',{transform:`translate(${R*.9+k*3.1},${R*.6}) scale(.8)`},g);drawBall(b,root)}
+  if(mk.g>3){const t=el('text',{x:R*.9+3*3.1-1.2,y:R*.6,'font-size':1.6,'font-weight':'bold','dominant-baseline':'central',fill:'#fff',stroke:'rgba(0,0,0,.6)','stroke-width':.3,'paint-order':'stroke'},g);t.textContent='+'+(mk.g-3)}
+  for(let k=0;k<Math.min(mk.a,3);k++){
+    // スパイク（つま先が左を向いた靴と、スタッド）
+    const b=el('g',{transform:`translate(${-R*1.1-k*2.4},${R*.5}) scale(1.3)`},g);
+    el('path',{d:'M -1.3 .55 L -1.3 .05 Q -1.3 -.35 -.85 -.4 L -.1 -.5 L .15 -1.05 L .85 -1.05 L .95 .55 Z',fill:'#111',stroke:'#fff','stroke-width':.18,'stroke-linejoin':'round'},b);
+    for(const x of [-1,-.4,.25,.75])el('rect',{x:x-.12,y:.55,width:.24,height:.3,fill:'#fff'},b);
+  }
+}
+function drawLineup(svgEl,m,L,top,marks){
   svgEl.setAttribute('viewBox',`-3 ${top} 74 ${108-top}`);
   drawFieldOn(svgEl,'mk_'+svgEl.id);
   const b=m.board, disp=S.settings.display;
   L.pos.forEach((p,i)=>{
     const id=L.ids[i], pl=id&&playerById(id), k=kitFor(p,b);
     const g=el('g',{class:'piece','data-i':i,transform:`translate(${p.x},${p.y})`},svgEl);
-    el('circle',{r:R,fill:pl?k.shirt:'rgba(255,255,255,.18)',stroke:pl?'rgba(0,0,0,.45)':'#fff','stroke-width':.3,'stroke-dasharray':pl?'':'1 .7'},g);
-    const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:2,fill:pl?k.text:'#fff'},g);t.textContent=pl?(pl.number??''):p.role;
+    el('circle',{r:R,fill:pl?kitPaint(g,k):'rgba(255,255,255,.18)',stroke:pl?'rgba(0,0,0,.45)':'#fff','stroke-width':.3,'stroke-dasharray':pl?'':'1 .7'},g);
+    const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:2,fill:pl?k.text:'#fff'},pl?kitTextAttrs(k):{}),g);t.textContent=pl?(pl.number??''):p.role;
     if(pl&&disp!=='number'&&pl.name){
       const lbl=fitText(pl.name,7), fs=2.55, bh=3.4;
       const n=el('text',{'text-anchor':'middle','dominant-baseline':'central',y:R+.35+bh/2,'font-size':fs,fill:'#fff'},g);n.textContent=lbl;
       const tw=textW(n,lbl.length*fs)+1.4;
       g.insertBefore(el('rect',{x:-tw/2,y:R+.35,width:tw,height:bh,rx:.7,fill:'rgba(0,0,0,.6)'}),n);
     }
+    if(id&&marks)drawPlayerMarks(g,svgEl,marks[id]);
     if(id&&L.start&&id!==L.start[i]){ // 途中から入った選手の印
       el('circle',{cx:R*.9,cy:-R*.9,r:1.45,fill:'#16a34a',stroke:'#fff','stroke-width':.3},g);
       const a=el('text',{x:R*.9,y:-R*.9,'text-anchor':'middle','dominant-baseline':'central','font-size':2,fill:'#fff'},g);a.textContent='↑';
@@ -1734,7 +1842,7 @@ function pickPlayer(m,title,cb){
   const kit=S.settings.kits[m.board.kit||'home'];
   const ps=lineupAt(m,null).ids.filter(Boolean).map(playerById).filter(Boolean).sort((a,b)=>(a.number??999)-(b.number??999));
   document.getElementById('pkList').innerHTML=ps.length?ps.map(p=>{const k=p.pos==='GK'?S.settings.kits.gk:kit;
-    return `<span class="chip" data-id="${p.id}"><span class="num" style="background:${k.shirt};color:${k.text};border:1px solid var(--line)">${esc(p.number??'')}</span>${esc(p.name||'')}</span>`}).join('')
+    return `<span class="chip" data-id="${p.id}"><span class="num" style="${kitCss(k)}border:1px solid var(--line)">${esc(p.number??'')}</span>${esc(p.name||'')}</span>`}).join('')
     :'<div class="muted">ピッチに選手がいません（先発をボードで入れてください）</div>';
   dlgPick.showModal();
 }
@@ -1871,8 +1979,8 @@ function drawSceneMarks(svgEl,marks,mk,colors){
       const g=el('g',{transform:`translate(${k.x},${k.y})`,'data-k':ki,style:'cursor:grab'},svgEl);
       if(k.s==='X'){el('path',{d:'M -1.7 -1.7 L 1.7 1.7 M -1.7 1.7 L 1.7 -1.7',stroke:'rgba(0,0,0,.5)','stroke-width':1.4,'stroke-linecap':'round'},g);el('path',{d:'M -1.7 -1.7 L 1.7 1.7 M -1.7 1.7 L 1.7 -1.7',stroke:'#fff','stroke-width':.7,'stroke-linecap':'round'},g)}
       else{const num=k.s==='num', col=num&&colors&&colors[k.side]||(num?{shirt:'#fff',text:'#111'}:{shirt:'#111',text:'#fff'});
-        el('circle',{r:num?2.6:2.3,fill:col.shirt,stroke:num?'rgba(0,0,0,.6)':'#111','stroke-width':.3},g);
-        const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':num&&String(k.label).length>2?2:2.6,'font-weight':'bold',fill:col.text},g);t.textContent=num?k.label:k.s}
+        el('circle',{r:num?2.6:2.3,fill:num&&col.pattern?kitPaint(g,col):col.shirt,stroke:num?'rgba(0,0,0,.6)':'#111','stroke-width':.3},g);
+        const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':num&&String(k.label).length>2?2:2.6,'font-weight':'bold',fill:col.text},num&&col.pattern?kitTextAttrs(col):{}),g);t.textContent=num?k.label:k.s}
       return;
     }
     const d=markD(k), shot=k.t==='shot', dash=k.t==='air'?'1.6 1.1':'';
@@ -1883,7 +1991,7 @@ function drawSceneMarks(svgEl,marks,mk,colors){
   svgEl.querySelectorAll(':scope > g[data-k]').forEach(g=>svgEl.appendChild(g));
 }
 // 選手の丸の色: 自チーム＝ホーム/アウェイのユニフォーム、相手＝相手チームの色
-function sceneColors(m){const k=S.settings.kits[(m&&m.board.kit)||'home'], t=m&&oppTeamOf(m), oc=(t&&t.color)||(m&&m.board.oppColor)||'#1d4ed8';return {own:{shirt:k.shirt,text:k.text},opp:{shirt:oc,text:contrast(oc)}}}
+function sceneColors(m){const k=S.settings.kits[(m&&m.board.kit)||'home'], t=m&&oppTeamOf(m), oc=(t&&t.color)||(m&&m.board.oppColor)||'#1d4ed8';return {own:k,opp:{shirt:oc,text:contrast(oc)}}}
 const SCENE_VB='-3 -4 74 60';
 function drawScene(){drawFieldOn(scSvg,'mk_sc');scSvg.setAttribute('viewBox',SCENE_VB);if(RR&&RR.e.scene)drawSceneMarks(scSvg,RR.e.scene.marks,'mk_sc',sceneColors(RR.m))}
 // 得点の時点でピッチにいた自チームの選手（その時点までの交代を当てる）
@@ -1980,15 +2088,15 @@ function renderRecLineup(m){
       <div class="row"><input type="text" id="rfText" class="grow" placeholder="ひとこと（任意。例: 3-5-2 に変更）" value="${esc(f.text||'')}"></div>
       <div class="row"><button class="pri" id="rfSave">保存</button><button id="rfCancel">やめる</button>${f.isNew?'':'<button class="danger" id="rfDel">削除</button>'}</div>`;
     REC.formTop=Math.min(H/2-20,lineupTop(f.pos));
-    drawLineup(svgEl,m,{pos:f.pos,ids:f.ids,start:f.start},REC.formTop);
+    drawLineup(svgEl,m,{pos:f.pos,ids:f.ids,start:f.start},REC.formTop,playerMarks(m,f.isNew?null:f.id));
     svgEl.style.touchAction='none';note.textContent='駒をドラッグして、変更後の並びにしてください';
   }else{
     const v=REC.view, L=lineupAt(m,v);
     const fe=v&&v!=='start'&&forms.find(e=>e.id===v);
     bar.innerHTML=fe?`<div class="row" style="margin-top:6px"><button class="sm" id="rfEdit">この並びの変更を直す</button></div>`:'';
-    drawLineup(svgEl,m,L,lineupTop(L.pos));
+    drawLineup(svgEl,m,L,lineupTop(L.pos),playerMarks(m,v));
     svgEl.style.touchAction='auto';
-    note.textContent=v==='start'?'先発の並び':fe?`${fe.min!=null?fe.min+'分の':''}並び変更のあと（その時点までの交代を反映）`:'いまの並び（交代・並び変更をすべて反映。↑は途中から入った選手）';
+    note.textContent=v==='start'?'先発の並び':fe?`${fe.min!=null?fe.min+'分の':''}並び変更のあと（その時点までの交代を反映）`:'いまの並び（交代・並び変更をすべて反映。↑は途中から入った選手。カード・⚽得点・スパイク＝アシスト）';
   }
 }
 document.getElementById('rcHist').onclick=ev=>{
@@ -2337,22 +2445,49 @@ document.getElementById('oppList').onclick=ev=>{const b=ev.target.closest('butto
 // ---------- 設定 ----------
 function renderSettings(){
   document.getElementById('teamName').value=S.settings.teamName||'';
-  document.getElementById('teamNameH').textContent=S.settings.teamName||'';
-  document.getElementById('kitRows').innerHTML=['home','away','gk'].map(k=>{const c=S.settings.kits[k];return `
-    <div class="kitrow"><span>${KIT_LABEL[k]}</span>
-      <input type="color" data-kit="${k}" data-f="shirt" value="${c.shirt}">
-      <input type="color" data-kit="${k}" data-f="text" value="${c.text}">
-      <svg viewBox="-4 -4 8 8" width="40" height="40"><circle r="3.6" fill="${c.shirt}" stroke="rgba(0,0,0,.4)" stroke-width=".25"/><text text-anchor="middle" dominant-baseline="central" font-size="3.2" font-weight="bold" fill="${c.text}">10</text></svg>
-    </div>`}).join('')+`<button class="sm" id="kitReset">初期の色に戻す</button>`;
+  document.getElementById('teamNameH').textContent=S.settings.teamName||(TEAMS.length>1?'（名前なし）':'チーム');
+  renderKits();
   document.getElementById('verLbl').textContent=APP_VERSION;
   renderTrash();renderLastBackup();
 }
-document.getElementById('teamName').onchange=ev=>{S.settings.teamName=ev.target.value.trim();saveSettings();renderSettings()};
-document.getElementById('kitRows').addEventListener('input',ev=>{
-  const t=ev.target;if(!t.dataset.kit)return;S.settings.kits[t.dataset.kit][t.dataset.f]=t.value;saveSettings();
-  const svgP=t.parentElement.querySelector('svg');svgP.querySelector('circle').setAttribute('fill',S.settings.kits[t.dataset.kit].shirt);svgP.querySelector('text').setAttribute('fill',S.settings.kits[t.dataset.kit].text);
+document.getElementById('teamName').onchange=async ev=>{S.settings.teamName=ev.target.value.trim();saveSettings();const ct=curTeam();if(ct){ct.name=S.settings.teamName;await saveTeams()}renderSettings()};
+const KIT_COLORS=[['#e60012','赤'],['#f39800','橙'],['#ffe100','黄'],['#009944','緑'],['#0068b7','青'],['#1d2088','藍'],['#920783','紫'],['#ffffff','白'],['#111111','黒']];
+const KIT_PATTERNS=[['solid','無地'],['stripe','ストライプ'],['border','ボーダー'],['half','2色']];
+function swatches(kit,f,cur){
+  const low=(cur||'').toLowerCase();
+  return `<div class="sw">${KIT_COLORS.map(([c,n])=>`<button class="swb${low===c?' on':''}" data-kit="${kit}" data-f="${f}" data-v="${c}" style="background:${c}" title="${n}" aria-label="${n}"></button>`).join('')}
+    <label class="muted" style="display:inline-flex;align-items:center;gap:4px">その他<input type="color" data-kit="${kit}" data-f="${f}" value="${cur||'#ffffff'}"></label></div>`;
+}
+function renderKits(){
+  const box=document.getElementById('kitRows');
+  box.innerHTML=['home','away','gk'].map(kit=>{const c=S.settings.kits[kit], pt=c.pattern||'solid';return `
+    <div class="kit-ed">
+      <div class="row" style="justify-content:space-between;margin:0"><b>${KIT_LABEL[kit]}</b><svg id="kitpv_${kit}" viewBox="-4.2 -4.2 8.4 8.4" width="46" height="46"></svg></div>
+      <div class="kit-lbl">色</div>${swatches(kit,'shirt',c.shirt)}
+      <div class="kit-lbl">柄</div><div class="seg" data-kit="${kit}">${KIT_PATTERNS.map(([v,n])=>`<button data-pt="${v}" class="${v===pt?'on':''}">${n}</button>`).join('')}</div>
+      ${pt!=='solid'?`<div class="kit-lbl">2つ目の色</div>${swatches(kit,'shirt2',c.shirt2)}`:''}
+      <div class="kit-lbl">番号の色</div>${swatches(kit,'text',c.text)}
+    </div>`}).join('')+`<button class="sm" id="kitReset">初期の色に戻す</button>`;
+  for(const kit of ['home','away','gk']){
+    const sv=document.getElementById('kitpv_'+kit), k=S.settings.kits[kit];
+    el('circle',{r:3.6,fill:kitPaint(sv,k),stroke:'rgba(0,0,0,.4)','stroke-width':.25},sv);
+    const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':3.2,'font-weight':'bold',fill:k.text},kitTextAttrs(k)),sv);t.textContent='10';
+  }
+}
+function setKit(kit,f,v){
+  const k=S.settings.kits[kit];k[f]=v;
+  if(f==='shirt'&&(!k.pattern||k.pattern==='solid'))k.text=contrast(v)==='#111'?'#111111':'#ffffff'; // 無地は、番号の色を読みやすい方に合わせる（あとで変えられる）
+  saveSettings();renderKits();
+}
+document.getElementById('kitRows').addEventListener('click',ev=>{
+  const sw=ev.target.closest('.swb');if(sw){setKit(sw.dataset.kit,sw.dataset.f,sw.dataset.v);return}
+  const pb=ev.target.closest('[data-pt]');
+  if(pb){const kit=pb.parentElement.dataset.kit,k=S.settings.kits[kit];k.pattern=pb.dataset.pt;
+    if(k.pattern!=='solid'&&(!k.shirt2||k.shirt2===k.shirt))k.shirt2=k.shirt.toLowerCase()==='#ffffff'?'#111111':'#ffffff';
+    saveSettings();renderKits();return}
+  if(ev.target.id==='kitReset'){if(!confirm('ユニフォームを初期の色に戻しますか？'))return;S.settings.kits=clone(DEFAULT_KITS);saveSettings();renderKits()}
 });
-document.getElementById('kitRows').addEventListener('click',ev=>{if(ev.target.id!=='kitReset')return;if(!confirm('ユニフォームの色を初期の色に戻しますか？'))return;S.settings.kits=clone(DEFAULT_KITS);saveSettings();renderSettings()});
+document.getElementById('kitRows').addEventListener('change',ev=>{const t=ev.target;if(t.type==='color'&&t.dataset.kit)setKit(t.dataset.kit,t.dataset.f,t.value)});
 function renderTrash(){
   const items=[...S.players.filter(x=>x.deletedAt).map(x=>({t:'players',l:'メンバー',n:`${x.number??''} ${x.name||''}`,x})),
     ...S.formations.filter(x=>x.deletedAt).map(x=>({t:'formations',l:'フォーメーション',n:x.name,x})),
@@ -2372,7 +2507,7 @@ async function exportBackup(){
     players:S.players,opponents:S.opponents,formations:S.formations,matches:S.matches,scenes:S.scenes,settings:S.settings,workBoard:S.board};
   const blob=new Blob([JSON.stringify(data,null,1)],{type:'application/json'});
   const d=new Date(), stamp=`${d.getFullYear()}${String(d.getMonth()+1).padStart(2,'0')}${String(d.getDate()).padStart(2,'0')}_${String(d.getHours()).padStart(2,'0')}${String(d.getMinutes()).padStart(2,'0')}`;
-  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`soccer-board_backup_${stamp}.json`;
+  const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=`soccer-board_backup_${S.settings.teamName?safeName(S.settings.teamName)+'_':''}${stamp}.json`;
   document.body.appendChild(a);a.click();a.remove();setTimeout(()=>URL.revokeObjectURL(a.href),5000);
   await setMeta('lastBackup',now());renderLastBackup();checkBackupNag();toast('書き出しました');
 }
@@ -2557,8 +2692,8 @@ function drawTac(){
     const pl=sc.label==='name'&&sc.ids[i]?playerById(sc.ids[i]):null;
     const g=el('g',{class:'piece','data-kind':'own','data-i':i,transform:tr(p.x,p.y)},tsvg);
     if(T.sel===i) el('circle',{r:R+1.1,fill:'none',stroke:'#fde047','stroke-width':.7},g);
-    el('circle',{r:R,fill:k.shirt,stroke:'rgba(0,0,0,.45)','stroke-width':.3},g);
-    const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:(p.role.length>2?1.9:2.4),'font-weight':'bold',fill:k.text},g);
+    el('circle',{r:R,fill:kitPaint(g,k),stroke:'rgba(0,0,0,.45)','stroke-width':.3},g);
+    const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:(p.role.length>2?1.9:2.4),'font-weight':'bold',fill:k.text},kitTextAttrs(k)),g);
     t.textContent=pl?(pl.number??''):p.role;
     if(pl&&pl.name){
       const lbl=fitText(pl.name,7), fs=2.55, bh=3.4;
@@ -2586,7 +2721,7 @@ function renderTacBench(){
   const kit=S.settings.kits[sc.kit||'home'];
   const list=activePlayers().filter(p=>!used.has(p.id));
   document.getElementById('tacBench').innerHTML=list.length?list.map(p=>{const k=p.pos==='GK'?S.settings.kits.gk:kit;
-    return `<span class="chip" data-id="${p.id}"><span class="num" style="background:${k.shirt};color:${k.text};border:1px solid var(--line)">${esc(p.number??'')}</span>${esc(p.name||'')}</span>`}).join('')
+    return `<span class="chip" data-id="${p.id}"><span class="num" style="${kitCss(k)}border:1px solid var(--line)">${esc(p.number??'')}</span>${esc(p.name||'')}</span>`}).join('')
     :'<div class="muted">入れられる選手はいません（メンバー画面で登録した選手が出ます）</div>';
 }
 document.getElementById('tacBench').addEventListener('click',ev=>{
@@ -2712,7 +2847,7 @@ async function setupSW(){
 }
 
 (async()=>{
-  db=await openDB();
+  db=await openTeamDb();
   await loadAll();
   renderAll();
   checkBackupNag();
