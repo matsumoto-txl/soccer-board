@@ -250,7 +250,8 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
         <label class="chk"><input type="checkbox" id="tacOpp"> 相手</label><input type="color" id="tacOppColor" title="相手の色">
         <label class="chk"><input type="checkbox" id="tacBall"> ボール</label>
       </div>
-      <div class="row"><div class="seg" id="tacToolSeg"><button data-tool="move">動かす</button><button data-tool="arrow">矢印</button><button data-tool="h">ヨコ線</button><button data-tool="v">タテ線</button></div></div>
+      <div class="row"><button class="sm" id="tacAddOwn">＋ 自チームの選手</button><button class="sm" id="tacAddOpp">＋ 相手の選手</button></div>
+      <div class="row"><div class="seg" id="tacToolSeg"><button data-tool="move">動かす</button><button data-tool="arrow">矢印</button><button data-tool="line">線</button><button data-tool="h">ヨコ線</button><button data-tool="v">タテ線</button></div></div>
       <div class="row">
         <div class="seg" id="tacDashSeg"><button data-dash="0">実線</button><button data-dash="1">点線</button></div>
         <div class="seg" id="tacCurveSeg"><button data-curve="0">直線</button><button data-curve="1">曲線</button></div>
@@ -259,6 +260,7 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
     </div>
     <div id="tacWrap"><svg id="tacPitch" xmlns="http://www.w3.org/2000/svg"></svg></div>
     <p class="muted" style="text-align:center;margin:6px 0 10px" id="tacHint"></p>
+    <div class="card" id="tacSelRow" hidden><div class="row" style="margin:0"><span id="tacSelText" class="grow"></span><button class="sm danger" id="tacSelDel">消す</button><button class="sm" id="tacSelOff">選ぶのをやめる</button></div></div>
     <div class="card">
       <div class="row" style="justify-content:space-between"><div class="title-line" style="margin:0">場面</div><span class="muted" id="tacFrameInfo"></span></div>
       <div class="row"><button class="sm" id="tacPrev">◀ 前</button><div id="tacFrames" class="grow" style="display:flex;flex-wrap:wrap;gap:4px"></div><button class="sm" id="tacNext">次 ▶</button></div>
@@ -281,21 +283,21 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
     </div>
     <div id="bulkBar" class="row" hidden style="background:color-mix(in srgb,var(--accent) 12%,transparent);border-radius:8px;padding:6px 8px;margin-bottom:6px">
       <b id="bulkCount"></b>
-      <span>学年を</span><select id="bulkGrade" class="grow"></select>
+      <span>区分を</span><select id="bulkGrade" class="grow"></select>
       <button class="sm pri" id="bulkApply">一括で変更</button>
       <button class="sm" id="bulkClear">選択を解除</button>
     </div>
-    <table><thead><tr><th style="width:1.8em"><input type="checkbox" id="selAll" title="すべて選択"></th><th style="width:3.2em">背番号</th><th>名前</th><th style="width:3.6em">学年</th><th style="width:2.6em">位置</th><th style="width:2.6em">登録</th><th style="width:3.2em"></th></tr></thead>
+    <table><thead><tr><th style="width:1.8em"><input type="checkbox" id="selAll" title="すべて選択"></th><th style="width:3.2em">背番号</th><th>名前</th><th style="width:3.6em">区分</th><th style="width:2.6em">位置</th><th style="width:2.6em">登録</th><th style="width:3.2em"></th></tr></thead>
     <tbody id="playerRows"></tbody></table>
     <div id="playerEmpty" class="empty" hidden>まだメンバーがいません。「＋ 追加」から登録してください。</div>
   </div>
-  <p class="muted">「登録」を外した選手は、控えや試合のベンチ入りの候補に出なくなります（保存済みのボード・試合には残ります）。試合ごとのベンチ入りは、ボードで試合を開いて「ベンチ入り」から選びます。左のチェックで選ぶと、学年を一括で変更できます。</p>
+  <p class="muted">「登録」を外した選手は、控えや試合のベンチ入りの候補に出なくなります（保存済みのボード・試合には残ります）。試合ごとのベンチ入りは、ボードで試合を開いて「ベンチ入り」から選びます。左のチェックで選ぶと、区分を一括で変更できます。</p>
   <div class="card">
-    <div class="title-line">学年</div>
+    <div class="title-line">区分</div>
     <div id="gradeList"></div>
-    <div class="row"><input type="text" id="gradeNew" class="grow" placeholder="例: 15回生 / 1年 / U-12"><button class="sm pri" id="gradeAdd">追加</button></div>
+    <div class="row"><input type="text" id="gradeNew" class="grow" placeholder="例: 15回生 / U-12 / 所属チーム / 国籍"><button class="sm pri" id="gradeAdd">追加</button></div>
   </div>
-  <p class="muted">ここで登録した学年を、メンバーの学年として選べます。上から順に選択肢に並びます。</p>
+  <p class="muted">ここで登録した区分を、メンバーの区分として選べます。上から順に選択肢に並びます。</p>
   <div class="card">
     <div class="row" style="justify-content:space-between">
       <div class="title-line">相手チーム</div>
@@ -385,6 +387,17 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
   <label class="f"><span>はじめの並び</span><select id="scBase"></select></label>
   <label class="f"><span>局面</span><select id="scZoom"></select></label>
   <div class="btns"><button id="scCancel">キャンセル</button><button class="pri" id="scOk">作る</button></div>
+</dialog>
+
+<dialog id="dlgTacAdd">
+  <h3 id="taTitle">選手を足す</h3>
+  <div id="taOwn">
+    <label class="f"><span>ポジション</span><select id="taRole"></select></label>
+    <label class="f"><span>選手</span><select id="taPlayer"></select></label>
+  </div>
+  <div id="taOpp"><label class="f"><span>背番号</span><input type="text" id="taNum" inputmode="numeric"></label></div>
+  <p class="muted">すべての場面に足します。いま見ている範囲の真ん中に置くので、ドラッグで動かしてください。続けて足せます。</p>
+  <div class="btns"><button id="taCancel">終わる</button><button class="pri" id="taOk">足す</button></div>
 </dialog>
 
 <dialog id="dlgShare">
@@ -509,7 +522,7 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
   <h3 id="plTitle">メンバー</h3>
   <label class="f"><span>背番号</span><input type="number" id="plNum" min="0" max="99" inputmode="numeric"></label>
   <label class="f"><span>名前（ボードに出す名前）</span><input type="text" id="plName" placeholder="例: 山田"></label>
-  <label class="f"><span>学年（メンバー画面の「学年」で登録したものから選ぶ）</span><select id="plGrade"></select></label>
+  <label class="f"><span>区分（メンバー画面の「区分」で登録したものから選ぶ）</span><select id="plGrade"></select></label>
   <label class="f"><span>位置</span><select id="plPos"><option value="">—</option><option>GK</option><option>DF</option><option>MF</option><option>FW</option></select></label>
   <div class="btns"><button id="plCancel">キャンセル</button><button class="pri" id="plOk">保存</button></div>
 </dialog>
@@ -529,7 +542,7 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
 
 <script>
 'use strict';
-const APP_VERSION='1.00.0';
+const APP_VERSION='1.01.0';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -583,7 +596,7 @@ const esc=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&
 // ---------- 状態 ----------
 const S={players:[],formations:[],matches:[],opponents:[],scenes:[],settings:null,board:null,selected:null,selOpp:null,page:'board',viewAt:null,
   draw:false,dash:false,curve:false}; // viewAt: 交代後の並びを見ている交代のID / draw: 矢印を描くモード（いずれも保存しない）
-function defaultSettings(){return {teamName:'',kits:clone(DEFAULT_KITS),display:'number',grades:[]}} // grades: 学年のマスター（文字列・上から順）
+function defaultSettings(){return {teamName:'',kits:clone(DEFAULT_KITS),display:'number',grades:[]}} // grades: 区分のマスター（文字列・上から順）
 function newBoard(size=11,tplName){
   const name=tplName||Object.keys(TPL[size])[0];
   const pieces=TPL[size][name].map(([role,x,y])=>({role,x,y,playerId:null}));
@@ -637,7 +650,7 @@ async function loadAll(){
   const savedSettings=await getMeta('settings',{});
   S.settings=Object.assign(defaultSettings(),savedSettings);
   S.settings.kits=Object.assign(clone(DEFAULT_KITS),S.settings.kits||{});
-  // 学年マスターが無い版（v0.5.0 以前）から来たときは、メンバーに入っている学年をそのままマスターに入れる（消さない・変えない）
+  // 区分マスターが無い版（v0.5.0 以前）から来たときは、メンバーに入っている区分をそのままマスターに入れる（消さない・変えない）
   if(!Array.isArray(savedSettings.grades)){
     S.settings.grades=[...new Set(S.players.filter(p=>p.grade).map(p=>p.grade))];
     await setMeta('settings',S.settings);
@@ -713,7 +726,7 @@ function arrowD(a){return a.kind==='curve'?`M ${a.x1} ${a.y1} Q ${a.cx} ${a.cy} 
 function drawArrow(a,parent,temp,mkId='ah'){
   const d=a.d||arrowD(a), dash=a.dash?'1.6 1.1':'';
   el('path',{d,fill:'none',stroke:'rgba(0,0,0,.35)','stroke-width':1.1,'stroke-linecap':'round','stroke-dasharray':dash},parent);
-  el('path',{d,fill:'none',stroke:'#fff','stroke-width':.6,'stroke-linecap':'round','stroke-dasharray':dash,'marker-end':temp?'':`url(#${mkId})`},parent);
+  el('path',{d,fill:'none',stroke:'#fff','stroke-width':.6,'stroke-linecap':'round','stroke-dasharray':dash,'marker-end':temp||a.head===false?'':`url(#${mkId})`},parent);
 }
 // サッカーボール（白地に黒の五角形）
 function drawBall(g,root=svg){
@@ -2279,11 +2292,11 @@ document.getElementById('sqOk').onclick=async()=>{
 
 // ---------- メンバー ----------
 const picked=new Set(); // 一括変更で選んでいるメンバーのID（保存しない）
-// 学年の選択肢。マスターに無い学年（今の値）も消さずに選択肢へ残す
+// 区分の選択肢。マスターに無い区分（今の値）も消さずに選択肢へ残す
 function gradeOptions(current,blankLabel='—'){
   const g=S.settings.grades||[];
   let h=`<option value="">${blankLabel}</option>`+g.map(x=>`<option value="${esc(x)}">${esc(x)}</option>`).join('');
-  if(current&&!g.includes(current)) h+=`<option value="${esc(current)}">${esc(current)}（学年の一覧に無い）</option>`;
+  if(current&&!g.includes(current)) h+=`<option value="${esc(current)}">${esc(current)}（区分の一覧に無い）</option>`;
   return h;
 }
 function renderPlayers(){
@@ -2316,12 +2329,12 @@ document.getElementById('bulkClear').onclick=()=>{picked.clear();renderPlayers()
 document.getElementById('bulkApply').onclick=async()=>{
   const g=document.getElementById('bulkGrade').value, targets=S.players.filter(p=>picked.has(p.id));
   if(!targets.length)return;
-  if(g==='__pick'){toast('変更先の学年を選んでください');return}
-  if(!confirm(`${targets.length}人の学年を「${g||'空欄'}」に変更します。よろしいですか？`))return;
+  if(g==='__pick'){toast('変更先の区分を選んでください');return}
+  if(!confirm(`${targets.length}人の区分を「${g||'空欄'}」に変更します。よろしいですか？`))return;
   for(const p of targets){p.grade=g;p.updatedAt=now();await put('players',p)}
-  picked.clear();toast(`${targets.length}人の学年を変更しました`);renderPlayers();
+  picked.clear();toast(`${targets.length}人の区分を変更しました`);renderPlayers();
 };
-// 学年マスター
+// 区分マスター
 function renderGrades(){
   const g=S.settings.grades||[], cnt=x=>S.players.filter(p=>!p.deletedAt&&p.grade===x).length;
   document.getElementById('gradeList').innerHTML=g.length?g.map((x,i)=>`
@@ -2334,7 +2347,7 @@ function renderGrades(){
 }
 document.getElementById('gradeAdd').onclick=async()=>{
   const inp=document.getElementById('gradeNew'), v=inp.value.trim();if(!v)return;
-  if(S.settings.grades.includes(v)){toast('同じ学年がすでにあります');return}
+  if(S.settings.grades.includes(v)){toast('同じ区分がすでにあります');return}
   S.settings.grades.push(v);await saveSettings();inp.value='';renderPlayers();
 };
 document.getElementById('gradeNew').onkeydown=ev=>{if(ev.key==='Enter'&&!ev.isComposing)document.getElementById('gradeAdd').click()};
@@ -2345,15 +2358,15 @@ document.getElementById('gradeList').onclick=async ev=>{
   if(b.dataset.g==='down'&&i<g.length-1){[g[i+1],g[i]]=[g[i],g[i+1]]}
   if(b.dataset.g==='rename'){
     const v=(prompt(`「${x}」の新しい名前`,x)||'').trim();if(!v||v===x)return;
-    if(g.includes(v)){toast('同じ学年がすでにあります');return}
+    if(g.includes(v)){toast('同じ区分がすでにあります');return}
     const users=S.players.filter(p=>p.grade===x);
     g[i]=v;
-    for(const p of users){p.grade=v;p.updatedAt=now();await put('players',p)} // 名前を変えたら、その学年のメンバーも合わせて変える
-    if(users.length)toast(`${users.length}人の学年も「${v}」に変えました`);
+    for(const p of users){p.grade=v;p.updatedAt=now();await put('players',p)} // 名前を変えたら、その区分のメンバーも合わせて変える
+    if(users.length)toast(`${users.length}人の区分も「${v}」に変えました`);
   }
   if(b.dataset.g==='del'){
     const n=S.players.filter(p=>!p.deletedAt&&p.grade===x).length;
-    if(!confirm(`学年「${x}」を一覧から外します。${n?`この学年の${n}人は、学年「${x}」のまま残ります（あとで変更できます）。`:''}`))return;
+    if(!confirm(`区分「${x}」を一覧から外します。${n?`この区分の${n}人は、区分「${x}」のまま残ります（あとで変更できます）。`:''}`))return;
     g.splice(i,1);
   }
   await saveSettings();renderPlayers();
@@ -2551,7 +2564,7 @@ async function doImport(mode){
   const scenes=(d.scenes||[]).map(x=>{const q=clone(x);if(mode==='add'){q.id=uid('s');q.ids=(q.ids||[]).map(id=>id&&pmap[id]||id)}return q});
   for(const x of scenes)await put('scenes',x);
   if(mode==='over'&&d.settings){S.settings=Object.assign(defaultSettings(),d.settings);await saveSettings()}
-  // 読み込んだ学年を、学年の一覧に足す（今の一覧は消さない）
+  // 読み込んだ区分を、区分の一覧に足す（今の一覧は消さない）
   S.settings.grades=S.settings.grades||[];
   for(const x of [...((d.settings&&d.settings.grades)||[]),...players.map(p=>p.grade).filter(Boolean)]) if(!S.settings.grades.includes(x)) S.settings.grades.push(x);
   await saveSettings();
@@ -2609,7 +2622,7 @@ const dlgScene=document.getElementById('dlgScene');
 document.getElementById('newSceneBtn').onclick=()=>{
   const fs=S.formations.filter(f=>!f.deletedAt).sort((a,c)=>c.updatedAt.localeCompare(a.updatedAt));
   document.getElementById('scName').value='';
-  document.getElementById('scBase').innerHTML=`<option value="board">いまのボード（${S.board.size}人制・${esc(S.board.tpl||'')}）</option>`
+  document.getElementById('scBase').innerHTML=`<option value="none" selected>駒なし（あとから選手を足す）</option><option value="board">いまのボード（${S.board.size}人制・${esc(S.board.tpl||'')}）</option>`
     +fs.map(f=>`<option value="f:${f.id}">フォーメーション: ${esc(f.name)}</option>`).join('')
     +[11,8].flatMap(n=>Object.keys(TPL[n]).map(t=>`<option value="t:${n}:${t}">ひな形: ${n}人制 ${t}</option>`)).join('');
   document.getElementById('scZoom').innerHTML=zoomOpts('full');
@@ -2619,7 +2632,8 @@ document.getElementById('scCancel').onclick=()=>dlgScene.close();
 document.getElementById('scOk').onclick=async()=>{
   const name=document.getElementById('scName').value.trim()||'局面の解説';
   const v=document.getElementById('scBase').value;let b;
-  if(v==='board') b=clone(S.board);
+  if(v==='none'){b=newBoard(S.board.size||11,Object.keys(TPL[S.board.size||11]||TPL[11])[0]);b.kit=S.board.kit;b.oppColor=S.board.oppColor;b.pieces=[];b.opp=[]}
+  else if(v==='board') b=clone(S.board);
   else if(v.startsWith('f:')){const f=S.formations.find(x=>x.id===v.slice(2));b=clone(f.board)}
   else{const [,n,t]=v.split(':');b=newBoard(+n,t)}
   const fr={zoom:document.getElementById('scZoom').value,pieces:b.pieces.map(p=>({role:p.role,x:p.x,y:p.y})),
@@ -2649,18 +2663,77 @@ function renderTactics(){
   document.querySelectorAll('#tacToolSeg button').forEach(x=>x.classList.toggle('on',x.dataset.tool===T.tool));
   document.querySelectorAll('#tacDashSeg button').forEach(x=>x.classList.toggle('on',(x.dataset.dash==='1')===T.dash));
   document.querySelectorAll('#tacCurveSeg button').forEach(x=>x.classList.toggle('on',(x.dataset.curve==='1')===T.curve));
-  document.getElementById('tacCurveSeg').hidden=T.tool!=='arrow';
+  document.getElementById('tacCurveSeg').hidden=T.tool!=='arrow'&&T.tool!=='line';
   document.getElementById('tacUndo').disabled=document.getElementById('tacClear').disabled=!fr.marks.length;
-  document.getElementById('tacHint').textContent={move:'駒・ボールはドラッグで移動。'+(sc.label==='name'?'駒をタップで選び、下の選手をタップで入れる。':''),
-    arrow:'ドラッグで矢印を描きます（駒は動きません）。',h:'ヨコ線: ドラッグでその長さ、タップでピッチの幅いっぱいに引きます。',v:'タテ線: ドラッグでその長さ、タップでピッチの縦いっぱいに引きます。'}[T.tool];
+  document.getElementById('tacHint').textContent={move:'駒・ボール・矢印・線はドラッグで動かせます。タップで選ぶと消せます。矢印・線を選ぶと、端と真ん中の点で形を変えられます（真ん中を引くと曲がります）。'+(sc.label==='name'?'自チームの駒を選んで、下の選手をタップすると入れられます。':''),
+    arrow:'ドラッグで矢印を描きます（駒は動きません）。',line:'ドラッグで線を描きます（矢印なし）。',h:'ヨコ線: ドラッグでその長さ、タップでピッチの幅いっぱいに引きます。',v:'タテ線: ドラッグでその長さ、タップでピッチの縦いっぱいに引きます。'}[T.tool];
   // 場面
   document.getElementById('tacFrameInfo').textContent=`${T.fi+1} / ${sc.frames.length}`;
   document.getElementById('tacFrames').innerHTML=sc.frames.map((f,i)=>`<button class="sm${i===T.fi?' pri':''}" data-fi="${i}" style="min-width:2.4em">${i+1}</button>`).join('');
   document.getElementById('tacPrev').disabled=T.fi===0;document.getElementById('tacNext').disabled=T.fi>=sc.frames.length-1;
   document.getElementById('tacDelFrame').disabled=sc.frames.length<=1;
   document.getElementById('tacNote').value=fr.note||'';
-  drawTac();renderTacBench();
+  drawTac();renderTacBench();renderTacSel();
 }
+// 選んでいるもの（T.sel = {kind:'own'|'opp'|'mark', i}）
+function selValid(){const s=T.sel, fr=T.scene&&curFrame();if(!s||!fr)return false;
+  return (s.kind==='own'?fr.pieces:s.kind==='opp'?fr.opp:fr.marks)[s.i]!=null}
+function renderTacSel(){
+  if(!selValid())T.sel=null;
+  const row=document.getElementById('tacSelRow');row.hidden=!T.sel||T.tool!=='move';if(row.hidden)return;
+  const sc=T.scene, fr=curFrame(), s=T.sel;let t;
+  if(s.kind==='own'){const p=fr.pieces[s.i], pl=sc.ids[s.i]&&playerById(sc.ids[s.i]);t=`自チーム ${p.role||''}${pl?`（${pl.number??''} ${pl.name||''}）`:''}`}
+  else if(s.kind==='opp')t=`相手 ${fr.opp[s.i].n??''}`;
+  else{const m=fr.marks[s.i];t=m.kind==='h'?'ヨコ線':m.kind==='v'?'タテ線':m.head===false?'線':'矢印'}
+  document.getElementById('tacSelText').textContent='選択中: '+t;
+}
+document.getElementById('tacSelOff').onclick=()=>{T.sel=null;renderTactics()};
+document.getElementById('tacSelDel').onclick=()=>{
+  const sc=T.scene, s=T.sel;if(!s||!selValid())return;
+  if(s.kind==='mark'){curFrame().marks.splice(s.i,1)}
+  else{
+    if(sc.frames.length>1&&!confirm('この選手を、すべての場面から消しますか？'))return;
+    sc.frames.forEach(f=>{const a=s.kind==='own'?f.pieces:f.opp;if(a.length>s.i)a.splice(s.i,1)});
+    if(s.kind==='own')sc.ids.splice(s.i,1);
+  }
+  T.sel=null;saveSceneSoon();renderTactics();
+};
+// 選手を足す（すべての場面に同じ位置で足す。場面ごとに数がずれないように）
+const dlgTacAdd=document.getElementById('dlgTacAdd');let taSide='own';
+const TAC_ROLES=['GK','CB','LB','RB','LWB','RWB','DF','DM','CM','LM','RM','AM','MF','LW','RW','CF','FW'];
+function openTacAdd(side){
+  taSide=side;const sc=T.scene, fr=curFrame();
+  document.getElementById('taTitle').textContent=side==='own'?'自チームの選手を足す':'相手の選手を足す';
+  document.getElementById('taOwn').hidden=side!=='own';document.getElementById('taOpp').hidden=side!=='opp';
+  if(side==='own'){
+    document.getElementById('taRole').innerHTML='<option value="">（なし）</option>'+TAC_ROLES.map(r=>`<option>${r}</option>`).join('');
+    const used=new Set(sc.ids.filter(Boolean));
+    document.getElementById('taPlayer').innerHTML='<option value="">（なし）</option>'+activePlayers().filter(p=>!used.has(p.id)).map(p=>`<option value="${p.id}">${esc(String(p.number??''))} ${esc(p.name||'')}</option>`).join('');
+  }else{
+    const nums=fr.opp.map(o=>parseInt(o.n,10)).filter(n=>!isNaN(n));
+    document.getElementById('taNum').value=nums.length?Math.max(...nums)+1:1;
+  }
+  if(!dlgTacAdd.open)dlgTacAdd.showModal();
+}
+document.getElementById('tacAddOwn').onclick=()=>openTacAdd('own');
+document.getElementById('tacAddOpp').onclick=()=>openTacAdd('opp');
+document.getElementById('taCancel').onclick=()=>{dlgTacAdd.close();renderTactics()};
+document.getElementById('taOk').onclick=()=>{
+  const sc=T.scene, fr=curFrame(), [x0,y0,x1,y1]=zoomBox(fr,sc.dir);
+  const n=fr.pieces.length+fr.opp.length, x=r1((x0+x1)/2+((n%5)-2)*6), y=r1((y0+y1)/2+(Math.floor(n/5)%3-1)*6);
+  if(taSide==='own'){
+    const role=document.getElementById('taRole').value, pid=document.getElementById('taPlayer').value||null;
+    const len=fr.pieces.length;while(sc.ids.length<len)sc.ids.push(null);sc.ids.length=len;
+    sc.frames.forEach(f=>f.pieces.push({role,x,y}));sc.ids.push(pid);
+    if(pid&&!role&&sc.label==='pos')sc.label='name';
+    toast(`自チームの選手を足しました${role?'（'+role+'）':''}`);
+  }else{
+    const num=document.getElementById('taNum').value.trim();
+    sc.frames.forEach(f=>{f.opp.push({n:num,x,y});f.showOpp=true});
+    toast(`相手の ${num} を足しました`);
+  }
+  T.sel=null;saveSceneSoon();drawTac();openTacAdd(taSide);
+};
 function drawTac(){
   const sc=T.scene, fr=curFrame(), [x0,y0,x1,y1]=zoomBox(fr,sc.dir);
   drawFieldOn(tsvg,'tah');
@@ -2678,11 +2751,17 @@ function drawTac(){
   el('path',{d:`M ${cx-1.8} ${yb+(up?2.6:-2.6)} L ${cx} ${yb} L ${cx+1.8} ${yb+(up?2.6:-2.6)} Z`,fill:'#fff'},dg);
   const lt=el('text',{x:cx+1.6,y:cy,'font-size':2,fill:'#fff','dominant-baseline':'central',transform:`rotate(${up?-90:90} ${cx+1.6} ${cy})`,'text-anchor':'middle'},dg);lt.textContent='攻撃方向';
   // 矢印と線
-  const mg=el('g',{class:'marks'},tsvg);
-  fr.marks.forEach(m=>drawMark(m,mg));
+  const mg=el('g',{class:'marks'},tsvg), canMove=T.tool==='move', sel=T.sel||{};
+  fr.marks.forEach((m,i)=>{
+    const g=el('g',{'data-mi':i},mg);
+    if(canMove)el('path',{d:tacMarkD(m),fill:'none',stroke:'transparent','stroke-width':3.2*T.k,'pointer-events':'stroke'},g);
+    if(sel.kind==='mark'&&sel.i===i)el('path',{d:tacMarkD(m),fill:'none',stroke:'#fde047','stroke-width':1.8,opacity:.45,'stroke-linecap':'round','pointer-events':'none'},g);
+    drawMark(m,g);
+  });
   // 相手
   if(fr.showOpp) fr.opp.forEach((o,i)=>{
     const g=el('g',{class:'piece','data-kind':'opp','data-i':i,transform:tr(o.x,o.y)},tsvg);
+    if(sel.kind==='opp'&&sel.i===i) el('circle',{r:R+1.1,fill:'none',stroke:'#fde047','stroke-width':.7},g);
     el('circle',{r:R*.92,fill:fr.oppColor,stroke:'#fff','stroke-width':.35},g);
     const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.6,fill:contrast(fr.oppColor)},g);t.textContent=o.n;
   });
@@ -2691,7 +2770,7 @@ function drawTac(){
     const k=p.role==='GK'?S.settings.kits.gk:S.settings.kits[sc.kit||'home'];
     const pl=sc.label==='name'&&sc.ids[i]?playerById(sc.ids[i]):null;
     const g=el('g',{class:'piece','data-kind':'own','data-i':i,transform:tr(p.x,p.y)},tsvg);
-    if(T.sel===i) el('circle',{r:R+1.1,fill:'none',stroke:'#fde047','stroke-width':.7},g);
+    if(sel.kind==='own'&&sel.i===i) el('circle',{r:R+1.1,fill:'none',stroke:'#fde047','stroke-width':.7},g);
     el('circle',{r:R,fill:kitPaint(g,k),stroke:'rgba(0,0,0,.45)','stroke-width':.3},g);
     const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:(p.role.length>2?1.9:2.4),'font-weight':'bold',fill:k.text},kitTextAttrs(k)),g);
     t.textContent=pl?(pl.number??''):p.role;
@@ -2703,7 +2782,17 @@ function drawTac(){
     }
   });
   if(fr.showBall){const g=el('g',{class:'piece','data-kind':'ball',transform:tr(fr.ball.x,fr.ball.y)},tsvg);drawBall(g,tsvg)}
+  // 選んだ矢印・線の形を変える点（端2つと、曲げる真ん中の点）
+  if(canMove&&sel.kind==='mark'&&fr.marks[sel.i]){
+    const m=fr.marks[sel.i], hs=[['1',m.x1,m.y1],['2',m.x2,m.y2]];
+    if(m.kind!=='h'&&m.kind!=='v'){const c=m.kind==='curve'?{x:m.cx,y:m.cy}:{x:(m.x1+m.x2)/2,y:(m.y1+m.y2)/2};
+      hs.push(['m',(m.x1+2*c.x+m.x2)/4,(m.y1+2*c.y+m.y2)/4])}
+    for(const [h,x,y] of hs){const g=el('g',{class:'hdl','data-h':h,transform:tr(x,y)},tsvg);
+      el('circle',{r:2.6,fill:'transparent'},g);
+      el('circle',{r:1.25,fill:h==='m'?'#fde047':'#fff',stroke:'#111','stroke-width':.3},g)}
+  }
 }
+const tacMarkD=m=>m.kind==='h'||m.kind==='v'?`M ${m.x1} ${m.y1} L ${m.x2} ${m.y2}`:(m.d||arrowD(m));
 function drawMark(m,parent,temp){
   if(m.kind==='h'||m.kind==='v'){
     const d=`M ${m.x1} ${m.y1} L ${m.x2} ${m.y2}`, dash=m.dash?'1.6 1.1':'';
@@ -2715,7 +2804,8 @@ function renderTacBench(){
   const sc=T.scene, card=document.getElementById('tacBenchCard');
   card.hidden=sc.label!=='name';if(card.hidden)return;
   const used=new Set(sc.ids.filter(Boolean)), info=document.getElementById('tacSelInfo'), un=document.getElementById('tacUnassign');
-  if(T.sel!=null){const p=curFrame().pieces[T.sel], pl=sc.ids[T.sel]&&playerById(sc.ids[T.sel]);
+  const si=T.sel&&T.sel.kind==='own'&&curFrame().pieces[T.sel.i]?T.sel.i:null;
+  if(si!=null){const p=curFrame().pieces[si], pl=sc.ids[si]&&playerById(sc.ids[si]);
     info.textContent=`選択中: ${p.role}${pl?`（${pl.number??''} ${pl.name||''}）`:''} → 入れる選手をタップ`;un.hidden=!pl}
   else{info.textContent='選手（駒をタップしてから選手をタップ）';un.hidden=true}
   const kit=S.settings.kits[sc.kit||'home'];
@@ -2726,10 +2816,10 @@ function renderTacBench(){
 }
 document.getElementById('tacBench').addEventListener('click',ev=>{
   const c=ev.target.closest('.chip');if(!c)return;
-  if(T.sel==null){toast('先に駒をタップして選んでください');return}
-  T.scene.ids[T.sel]=c.dataset.id;T.sel=null;saveSceneSoon();renderTactics();
+  if(!T.sel||T.sel.kind!=='own'){toast('先に自チームの駒をタップして選んでください');return}
+  T.scene.ids[T.sel.i]=c.dataset.id;T.sel=null;saveSceneSoon();renderTactics();
 });
-document.getElementById('tacUnassign').onclick=()=>{if(T.sel==null)return;T.scene.ids[T.sel]=null;T.sel=null;saveSceneSoon();renderTactics()};
+document.getElementById('tacUnassign').onclick=()=>{if(!T.sel||T.sel.kind!=='own')return;T.scene.ids[T.sel.i]=null;T.sel=null;saveSceneSoon();renderTactics()};
 document.getElementById('tacZoom').onchange=ev=>{curFrame().zoom=ev.target.value;saveSceneSoon();renderTactics()};
 document.getElementById('tacDirSeg').onclick=ev=>{const d=ev.target.dataset.dir;if(!d)return;T.scene.dir=d;saveSceneSoon();renderTactics()};
 document.getElementById('tacLabelSeg').onclick=ev=>{const l=ev.target.dataset.l;if(!l)return;T.scene.label=l;T.sel=null;saveSceneSoon();renderTactics()};
@@ -2765,7 +2855,16 @@ tsvg.addEventListener('pointerdown',ev=>{
     try{tsvg.setPointerCapture(ev.pointerId)}catch(e){}
     return;
   }
-  const g=ev.target.closest('.piece');
+  const h=ev.target.closest('.hdl'), g=ev.target.closest('.piece'), mk=ev.target.closest('[data-mi]');
+  if(h&&T.sel&&T.sel.kind==='mark'){
+    ev.preventDefault();tdrag={kind:'hdl',h:h.dataset.h,m:fr.marks[T.sel.i],moved:false,sx:ev.clientX,sy:ev.clientY};
+    try{tsvg.setPointerCapture(ev.pointerId)}catch(e){}return;
+  }
+  if(!g&&mk){
+    ev.preventDefault();const i=+mk.dataset.mi, m=fr.marks[i];
+    tdrag={kind:'mark',i,m,orig:clone(m),p0:p,moved:false,sx:ev.clientX,sy:ev.clientY};
+    try{tsvg.setPointerCapture(ev.pointerId)}catch(e){}return;
+  }
   if(!g){if(T.sel!=null){T.sel=null;renderTactics()}return}
   ev.preventDefault();
   const kind=g.dataset.kind,i=+g.dataset.i;
@@ -2773,6 +2872,24 @@ tsvg.addEventListener('pointerdown',ev=>{
   tdrag={kind,i,obj,g,dx:obj.x-p.x,dy:obj.y-p.y,moved:false,sx:ev.clientX,sy:ev.clientY};
   try{tsvg.setPointerCapture(ev.pointerId)}catch(e){}
 });
+// 矢印・線を動かす（全体をずらす／端や真ん中の点で形を変える）
+function moveMark(d,p){
+  const m=d.m, lim=(v,a,b)=>r1(Math.min(b,Math.max(a,v)));
+  if(d.kind==='mark'){
+    const o=d.orig, dx=p.x-d.p0.x, dy=p.y-d.p0.y;
+    m.x1=r1(o.x1+dx);m.y1=r1(o.y1+dy);m.x2=r1(o.x2+dx);m.y2=r1(o.y2+dy);
+    if(o.cx!=null){m.cx=r1(o.cx+dx);m.cy=r1(o.cy+dy)}
+    return;
+  }
+  const x=lim(p.x,-2,W+2), y=lim(p.y,-2,H+2);
+  if(d.h==='m'){
+    // 真ん中の点を通る曲線にする（2次ベジェの t=0.5 がこの点になる制御点）
+    m.kind='curve';m.cx=r1(2*x-(m.x1+m.x2)/2);m.cy=r1(2*y-(m.y1+m.y2)/2);return;
+  }
+  const k=d.h==='1'?['x1','y1']:['x2','y2'];
+  if(m.kind!=='v')m[k[0]]=x;
+  if(m.kind!=='h')m[k[1]]=y;
+}
 function snapMark(a,z){
   if(T.tool==='h'){const y=r1(a.y);return z?{x1:r1(Math.min(a.x,z.x)),y1:y,x2:r1(Math.max(a.x,z.x)),y2:y}:{x1:0,y1:y,x2:W,y2:y}}
   const x=r1(a.x);return z?{x1:x,y1:r1(Math.min(a.y,z.y)),x2:x,y2:r1(Math.max(a.y,z.y))}:{x1:x,y1:0,x2:x,y2:H};
@@ -2782,7 +2899,7 @@ tsvg.addEventListener('pointermove',ev=>{
     const p=svgPt(ev,tsvg), last=tpen.pts[tpen.pts.length-1];
     if(Math.hypot(p.x-last.x,p.y-last.y)<.4)return;
     tpen.pts.push(p);const a=tpen.pts[0];tpen.g.innerHTML='';
-    if(T.tool==='arrow'){
+    if(T.tool==='arrow'||T.tool==='line'){
       const d=T.curve?'M '+tpen.pts.map(q=>`${q.x.toFixed(1)} ${q.y.toFixed(1)}`).join(' L '):`M ${a.x} ${a.y} L ${p.x} ${p.y}`;
       drawArrow({d,dash:T.dash},tpen.g,true,'tah');
     }else drawMark(Object.assign({kind:T.tool,dash:T.dash},snapMark(a,p)),tpen.g,true);
@@ -2791,15 +2908,21 @@ tsvg.addEventListener('pointermove',ev=>{
   if(!tdrag)return;
   if(!tdrag.moved&&Math.hypot(ev.clientX-tdrag.sx,ev.clientY-tdrag.sy)<5)return;
   tdrag.moved=true;const p=svgPt(ev,tsvg);
+  if(tdrag.kind==='mark'||tdrag.kind==='hdl'){
+    moveMark(tdrag,p);
+    if(tdrag.kind==='mark')T.sel={kind:'mark',i:tdrag.i};
+    drawTac();return;
+  }
   tdrag.obj.x=r1(Math.min(W+1.5,Math.max(-1.5,p.x+tdrag.dx)));tdrag.obj.y=r1(Math.min(H+1.5,Math.max(-1.5,p.y+tdrag.dy)));
   tdrag.g.setAttribute('transform',`translate(${tdrag.obj.x},${tdrag.obj.y}) scale(${T.k||1})`);
 });
 function tEnd(){
   if(tpen){
     const pts=tpen.pts;tpen.g.remove();tpen=null;const a=pts[0], z=pts[pts.length-1], len=Math.hypot(z.x-a.x,z.y-a.y), fr=curFrame();
-    if(T.tool==='arrow'){
+    if(T.tool==='arrow'||T.tool==='line'){
       if(len<2)return;
       const m={id:uid('a'),dash:T.dash,kind:'line',x1:r1(a.x),y1:r1(a.y),x2:r1(z.x),y2:r1(z.y)};
+      if(T.tool==='line')m.head=false;
       if(T.curve){let best=null,bd=0;for(const q of pts){const dd=Math.abs((z.x-a.x)*(a.y-q.y)-(a.x-q.x)*(z.y-a.y))/len;if(dd>bd){bd=dd;best=q}}
         if(best&&bd>=1){m.kind='curve';m.cx=r1(2*best.x-(a.x+z.x)/2);m.cy=r1(2*best.y-(a.y+z.y)/2)}}
       fr.marks.push(m);
@@ -2811,8 +2934,13 @@ function tEnd(){
     saveSceneSoon();renderTactics();return;
   }
   if(!tdrag)return;const d=tdrag;tdrag=null;
+  if(d.kind==='hdl'){if(d.moved){saveSceneSoon();renderTactics()}return}
+  if(d.kind==='mark'){
+    if(d.moved){saveSceneSoon();renderTactics();return}
+    T.sel=T.sel&&T.sel.kind==='mark'&&T.sel.i===d.i?null:{kind:'mark',i:d.i};renderTactics();return;
+  }
   if(d.moved){saveSceneSoon();return}
-  if(d.kind==='own'&&T.scene.label==='name'){T.sel=T.sel===d.i?null:d.i;renderTactics()}
+  if(d.kind==='own'||d.kind==='opp'){const same=T.sel&&T.sel.kind===d.kind&&T.sel.i===d.i;T.sel=same?null:{kind:d.kind,i:d.i};renderTactics()}
 }
 tsvg.addEventListener('pointerup',tEnd);tsvg.addEventListener('pointercancel',tEnd);
 
