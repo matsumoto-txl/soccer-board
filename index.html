@@ -542,7 +542,7 @@ table.stat td:first-child,table.stat th:first-child{text-align:left}
 
 <script>
 'use strict';
-const APP_VERSION='1.01.0';
+const APP_VERSION='1.01.1';
 const SCHEMA=1;
 const W=68, H=105; // ピッチ（m）
 const R=3.1;        // 駒の半径
@@ -722,6 +722,38 @@ function drawFieldOn(svg,mkId){
 // 描いた文字の実際の幅（測れないときは目安の幅）
 function textW(t,fallback){try{const w=t.getComputedTextLength();return w>0?w:fallback}catch(e){return fallback}}
 function fitText(t,max){const s=String(t);return s.length>max?s.slice(0,max-1)+'…':s}
+// 名前を2行に分ける位置（真ん中に近い空白か「・」「-」があればそこ、無ければ文字数の半分）
+// 空白は消し、「・」「-」は1行目の終わりに残す
+function splitName(s){
+  const mid=s.length/2;let best=-1,bd=1e9;
+  for(let i=1;i<s.length-1;i++)if(' 　・･-'.includes(s[i])){const d=Math.abs(i+.5-mid);if(d<bd){bd=d;best=i}}
+  if(best>0&&bd<=s.length*.3)return (s[best]===' '||s[best]==='　')?[s.slice(0,best),s.slice(best+1)]:[s.slice(0,best+1),s.slice(best+1)];
+  const c=Math.ceil(s.length/2);return [s.slice(0,c),s.slice(c)];
+}
+// 名前の文字を置く。幅 maxW に収まらなければ文字を小さくし（minFs まで）、それでも収まらなければ2行に折り返す
+// 戻り値: {ts:[text要素], fs:文字の大きさ, w:いちばん長い行の幅}。行の y は呼び出し側で決める
+function fitNameLines(g,name,fs,minFs,maxW,attrs){
+  let s=String(name).trim();if(s.length>24)s=s.slice(0,23)+'…';
+  const est=(txt,f)=>[...txt].reduce((a,c)=>a+(c.charCodeAt(0)<256?.6:1),0)*f;
+  const mk=(txt,f)=>{const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':f},attrs),g);t.textContent=txt;return t};
+  const t=mk(s,fs), w=textW(t,est(s,fs));
+  if(w<=maxW)return {ts:[t],fs,w};
+  if(w*minFs/fs<=maxW){const f=fs*maxW/w;t.setAttribute('font-size',f);return {ts:[t],fs:f,w:maxW}}
+  t.remove();
+  const parts=splitName(s), f2=fs*.92;
+  const ts=parts.map(p=>mk(p,f2));
+  let mw=Math.max(...ts.map((x,i)=>textW(x,est(parts[i],f2)))), f=f2;
+  if(mw>maxW){f=Math.max(minFs,f2*maxW/mw);ts.forEach(x=>x.setAttribute('font-size',f));mw=mw*f/f2}
+  return {ts,fs:f,w:mw};
+}
+// 駒の下の黒い帯に名前を出す（長い名前も全文。帯は文字の幅と行数に合わせる）
+function drawNameTag(g,name){
+  const top=R+.35, r=fitNameLines(g,name,2.55,1.9,15,{fill:'#fff'});
+  const lh=r.fs*1.12, bh=lh*r.ts.length+.55;
+  r.ts.forEach((t,i)=>t.setAttribute('y',top+.275+lh*(i+.5)));
+  const tw=r.w+1.4;
+  g.insertBefore(el('rect',{x:-tw/2,y:top,width:tw,height:bh,rx:.7,fill:'rgba(0,0,0,.6)'}),r.ts[0]);
+}
 function arrowD(a){return a.kind==='curve'?`M ${a.x1} ${a.y1} Q ${a.cx} ${a.cy} ${a.x2} ${a.y2}`:`M ${a.x1} ${a.y1} L ${a.x2} ${a.y2}`}
 function drawArrow(a,parent,temp,mkId='ah'){
   const d=a.d||arrowD(a), dash=a.dash?'1.6 1.1':'';
@@ -783,20 +815,18 @@ function drawPieces(){
     let numTxt=pl?(pl.number??''):'', nameTxt=pl?(pl.name||''):'';
     if(disp==='name' && pl){
       // 名前は背番号（2.9）に近い大きさで出す。枠の幅は実際の文字幅に合わせる
-      const label=fitText(nameTxt||String(numTxt),6);
-      const t=el('text',{'text-anchor':'middle','dominant-baseline':'central','font-size':2.75,fill:k.text},g);t.textContent=label;
-      const tw=textW(t,label.length*2.75), w=Math.max(R*2,tw+2), h=R*1.8;
-      Object.entries(kitTextAttrs(k)).forEach(([a,v])=>t.setAttribute(a,v));
-      g.insertBefore(el('rect',{x:-w/2,y:-h/2,width:w,height:h,rx:h/2,fill:kitPaint(g,k),stroke:'rgba(0,0,0,.45)','stroke-width':.3}),t);
+      // 長い名前は文字を小さくし、それでも入らなければ2行にする（全文を出す）
+      const r=fitNameLines(g,nameTxt||String(numTxt),2.75,2.1,13,Object.assign({fill:k.text},kitTextAttrs(k)));
+      const lh=r.fs*1.1, n=r.ts.length;
+      r.ts.forEach((t,i)=>t.setAttribute('y',(i-(n-1)/2)*lh));
+      const w=Math.max(R*2,r.w+2), h=Math.max(R*1.8,lh*n+.9);
+      g.insertBefore(el('rect',{x:-w/2,y:-h/2,width:w,height:h,rx:Math.min(h/2,R*.9),fill:kitPaint(g,k),stroke:'rgba(0,0,0,.45)','stroke-width':.3}),r.ts[0]);
     }else{
       el('circle',{r:R,fill:pl?kitPaint(g,k):'rgba(255,255,255,.18)',stroke:pl?'rgba(0,0,0,.45)':'#fff','stroke-width':.3,'stroke-dasharray':pl?'':'1 .7'},g);
       const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:2,fill:pl?k.text:'#fff'},pl?kitTextAttrs(k):{}),g);
       t.textContent=pl?numTxt:p.role;
       if(disp==='both' && pl && nameTxt){
-        const lbl=fitText(nameTxt,7), fs=2.55, bh=3.4;
-        const n=el('text',{'text-anchor':'middle','dominant-baseline':'central',y:R+.35+bh/2,'font-size':fs,fill:'#fff'},g);n.textContent=lbl;
-        const tw=textW(n,lbl.length*fs)+1.4;
-        g.insertBefore(el('rect',{x:-tw/2,y:R+.35,width:tw,height:bh,rx:.7,fill:'rgba(0,0,0,.6)'}),n);
+        drawNameTag(g,nameTxt);
       }
     }
     if(g._subbed){ // 途中から入った選手の印
@@ -1655,10 +1685,7 @@ function drawLineup(svgEl,m,L,top,marks){
     el('circle',{r:R,fill:pl?kitPaint(g,k):'rgba(255,255,255,.18)',stroke:pl?'rgba(0,0,0,.45)':'#fff','stroke-width':.3,'stroke-dasharray':pl?'':'1 .7'},g);
     const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:2,fill:pl?k.text:'#fff'},pl?kitTextAttrs(k):{}),g);t.textContent=pl?(pl.number??''):p.role;
     if(pl&&disp!=='number'&&pl.name){
-      const lbl=fitText(pl.name,7), fs=2.55, bh=3.4;
-      const n=el('text',{'text-anchor':'middle','dominant-baseline':'central',y:R+.35+bh/2,'font-size':fs,fill:'#fff'},g);n.textContent=lbl;
-      const tw=textW(n,lbl.length*fs)+1.4;
-      g.insertBefore(el('rect',{x:-tw/2,y:R+.35,width:tw,height:bh,rx:.7,fill:'rgba(0,0,0,.6)'}),n);
+      drawNameTag(g,pl.name);
     }
     if(id&&marks)drawPlayerMarks(g,svgEl,marks[id]);
     if(id&&L.start&&id!==L.start[i]){ // 途中から入った選手の印
@@ -2775,10 +2802,7 @@ function drawTac(){
     const t=el('text',Object.assign({'text-anchor':'middle','dominant-baseline':'central','font-size':pl?2.9:(p.role.length>2?1.9:2.4),'font-weight':'bold',fill:k.text},kitTextAttrs(k)),g);
     t.textContent=pl?(pl.number??''):p.role;
     if(pl&&pl.name){
-      const lbl=fitText(pl.name,7), fs=2.55, bh=3.4;
-      const n=el('text',{'text-anchor':'middle','dominant-baseline':'central',y:R+.35+bh/2,'font-size':fs,fill:'#fff'},g);n.textContent=lbl;
-      const tw=textW(n,lbl.length*fs)+1.4;
-      g.insertBefore(el('rect',{x:-tw/2,y:R+.35,width:tw,height:bh,rx:.7,fill:'rgba(0,0,0,.6)'}),n);
+      drawNameTag(g,pl.name);
     }
   });
   if(fr.showBall){const g=el('g',{class:'piece','data-kind':'ball',transform:tr(fr.ball.x,fr.ball.y)},tsvg);drawBall(g,tsvg)}
